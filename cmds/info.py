@@ -1,18 +1,13 @@
 import discord 
+import os
 
 from discord import app_commands
 from discord.ext import commands
 
 import dynmap
-from dynmap import errors as e
 
 import setup as s
-
 from funcs import cmds
-
-import os
-
-from dynmap import world as dynmap_w
 
 class Info(commands.GroupCog, name="info", description="Bot info"):
 
@@ -22,6 +17,8 @@ class Info(commands.GroupCog, name="info", description="Bot info"):
     
     @app_commands.command(name="help", description="Get a list of bot commands with a description of their function")
     async def _help(self, interaction : discord.Interaction):
+
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
 
         embed = discord.Embed(title="Ruler Help", description="Ruler Helper is a Discord Bot for everything RulerCraft. See its commands below.", color=s.embed)
 
@@ -47,7 +44,7 @@ class Info(commands.GroupCog, name="info", description="Bot info"):
 
         
 
-        
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
             
 
         tracking = self.client.get_tracking()

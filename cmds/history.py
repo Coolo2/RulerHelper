@@ -5,6 +5,8 @@ import datetime
 from discord import app_commands
 from discord.ext import commands
 
+import matplotlib.pyplot as plt
+
 import dynmap
 from dynmap import tracking as dynmap_t
 from dynmap import errors as e
@@ -13,8 +15,6 @@ from funcs.components import paginator
 from funcs import graphs
 from funcs import functions
 import setup as s
-
-import matplotlib.pyplot as plt
 
 class History(commands.Cog):
 
@@ -28,8 +28,10 @@ class History(commands.Cog):
     @history_town.command(name="bank", description="Bank history over time")
     async def _bank_history(self, interaction : discord.Interaction, town : str):
 
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+
         tracking = self.client.get_tracking()
-        town : dynmap_t.TrackTown = tracking.get_town(town.replace(" ",  "_"), case_sensitive=False)
+        town : dynmap_t.TrackTown = tracking.get_town(town.replace(" ", "_"), case_sensitive=False)
 
         if not town:
             raise e.MildError("Town not found")
@@ -72,10 +74,12 @@ class History(commands.Cog):
     @history_town.command(name="visitors", description="All players who visited the town")
     async def _visitors(self, interaction : discord.Interaction, town : str):
 
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+
         await interaction.response.defer()
 
         tracking = self.client.get_tracking()
-        town : dynmap_t.TrackTown = tracking.get_town(town.replace(" ",  "_"), case_sensitive=False)
+        town : dynmap_t.TrackTown = tracking.get_town(town.replace(" ", "_"), case_sensitive=False)
 
         if not town:
             raise e.MildError("Town not found")
@@ -140,8 +144,10 @@ class History(commands.Cog):
     @history_town.command(name="total_residents", description="A total of residents for a town over time")
     async def _residents(self, interaction : discord.Interaction, town : str):
 
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+
         tracking = self.client.get_tracking()
-        town : dynmap_t.TrackTown = tracking.get_town(town.replace(" ",  "_"), case_sensitive=False)
+        town : dynmap_t.TrackTown = tracking.get_town(town.replace(" ", "_"), case_sensitive=False)
 
         if not town:
             raise e.MildError("Town not found")

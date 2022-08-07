@@ -15,9 +15,6 @@ from dynmap import errors as e
 
 from funcs import functions, graphs 
 
-from matplotlib import pyplot as plt
-
-
 class Get(commands.GroupCog, name="get", description="All get commands"):
 
     def __init__(self, bot : commands.Bot, client : dynmap.Client):
@@ -29,6 +26,8 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
     
     @app_commands.command(name="online", description="Get online members and their positions")
     async def _online(self, interaction : discord.Interaction):
+
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
 
         await interaction.response.defer()
 
@@ -69,6 +68,8 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
     
     @app_commands.command(name="player", description="Get info for a specific player")
     async def _player(self, interaction : discord.Interaction, player : str):
+
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
 
         world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
         tracking_player : dynmap_t.TrackPlayer = self.client.get_tracking().get_player(player)
@@ -116,11 +117,18 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
     @app_commands.command(name="town", description="Get info for a specific town")
     async def _town(self, interaction : discord.Interaction, town : str):
 
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+
+        await interaction.response.defer()
+
         world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
-        town : dynmap_w.Town = world.get_town(town.replace(" ",  "_"), case_sensitive=False)
+        town : dynmap_w.Town = world.get_town(town.replace(" ", "_"), case_sensitive=False)
 
         if not town:
             raise e.MildError("Town not found")
+        
+        file_name = graphs.plot_towns([town])
+        graph = discord.File(file_name, filename="town_border.png")
 
         embed = discord.Embed(
             title=f"Town: {town.name.replace('_', ' ')}", 
@@ -133,9 +141,20 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.add_field(name="Bank", value=f"${town.bank:,}")
         embed.add_field(name="Ruler", value=f"{town.ruler}" if str(town.ruler).replace(" ", "") != "" else "Unknown")
         embed.add_field(name="Coordinates", value=f"[{town.x:,d}, {town.y:,d}, {town.z:,d}]({self.client.url}?x={town.x}&z={town.z}&zoom=10)")
+        embed.add_field(name="Total Residents", value=str(town.total_residents))
         embed.add_field(name="Area", value=f"{town.area_km:,.1f}km²")
 
-        await interaction.response.send_message(embed=embed)
+        embed.set_thumbnail(url="attachment://town_border.png")
+
+        await interaction.followup.send(embed=embed, file=graph)
+
+        msg = await interaction.original_message()
+
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].thumbnail.url, row=2))
+        await msg.edit(
+            view=view
+        )
 
     @_town.autocomplete("town")
     async def _town_autocomplete(self, interaction : discord.Interaction, current : str):
@@ -147,13 +166,20 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
     @app_commands.command(name="nation", description="Get info for a specific nation")
     async def _nation(self, interaction : discord.Interaction, nation : str):
 
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+
+        await interaction.response.defer()
+
         world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
-        nation : dynmap_w.Nation = world.get_nation(nation.replace(" ",  "_"), case_sensitive=False)
+        nation : dynmap_w.Nation = world.get_nation(nation.replace(" ", "_"), case_sensitive=False)
 
         if not nation:
             raise e.MildError("Nation not found")
 
         towns = nation.get_towns()
+
+        file_name = graphs.plot_towns(towns)
+        graph = discord.File(file_name, filename="nation_towns.png")
 
         total_area = 0
         for town in towns:
@@ -169,6 +195,8 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.add_field(name="Residents", value=str(total_residents))
         embed.add_field(name=f"Towns ({len(towns)})", value="`" + "`, `".join([t.name for t in towns]) + "`", inline=False)
         embed.add_field(name="Area", value=f"{total_area:,.1f}km²", inline=False)
+
+        embed.set_thumbnail(url="attachment://nation_towns.png")
 
         view = discord.ui.View()
 
@@ -191,7 +219,14 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         view.add_item(SelectNation(self, tree, towns))
 
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.followup.send(embed=embed, view=view, file=graph)
+
+        msg = await interaction.original_message()
+
+        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].thumbnail.url, row=2))
+        await msg.edit(
+            view=view
+        )
 
     @_nation.autocomplete("nation")
     async def _nation_autocomplete(self, interaction : discord.Interaction, current : str):
@@ -202,10 +237,13 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
     
     @app_commands.command(name="world", description="Get a map and world info")
     async def _world(self, interaction : discord.Interaction):
+        
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
 
         await interaction.response.defer()
         
         world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        tracking = self.client.get_tracking()
 
         file_name = graphs.plot_world(world)
         graph = discord.File(file_name, filename="world_map.png")
@@ -213,11 +251,16 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         total_area = 0
         total_town_value = 0
         total_residents = 0
+        known_players = 0
 
         for town in world.towns:
             total_area += town.area_km
             total_town_value += town.bank
             total_residents += town.total_residents
+        
+        for player in tracking.players:
+            if player.get_likely_residency():
+                known_players += 1
 
         embed = discord.Embed(title="RulerCraft Earth", color=s.embed)
         embed.set_image(url="attachment://world_map.png")
@@ -226,7 +269,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.add_field(name="Total nations", value=f"{len(world.nations)}")
         embed.add_field(name="Total town value", value=f"${total_town_value:,.2f}")
         embed.add_field(name="Total claimed area", value=f"{total_area:,.1f}km²")
-        embed.add_field(name="Total residents", value=f"{total_residents:,d}")
+        embed.add_field(name="Total residents", value=f"{total_residents:,d} ({known_players:,d} known)")
 
         await interaction.followup.send(embed=embed, file=graph)
 

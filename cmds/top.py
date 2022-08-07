@@ -7,16 +7,12 @@ from discord.ext import commands
 
 import dynmap
 from dynmap import world as dynmap_w 
-from dynmap import errors as e
 
 from funcs.components import paginator
+from funcs import graphs, functions
 import setup as s
 
-from funcs import graphs
-
 import matplotlib.pyplot as plt
-
-from funcs import functions
 
 class Top(commands.Cog):
 
@@ -33,6 +29,8 @@ class Top(commands.Cog):
 
     @top_towns.command(name="activity", description="Towns listed by activity (total time online)")
     async def _towns_activity(self, interaction : discord.Interaction, highlight : str = None):
+
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
 
         tracking = self.client.get_tracking()
 
@@ -97,6 +95,8 @@ class Top(commands.Cog):
     @top_towns.command(name="residents", description="Towns ordered by total residents")
     async def _towns_residents(self, interaction : discord.Interaction, highlight : str = None):
 
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+
         world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
         world.towns = list(sorted(world.towns, key=lambda x:x.total_residents, reverse=True))
 
@@ -153,6 +153,8 @@ class Top(commands.Cog):
     
     @top_towns.command(name="area", description="Towns ordered by total area")
     async def _towns_area(self, interaction : discord.Interaction, highlight : str = None):
+
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
 
         world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
         world.towns = list(sorted(world.towns, key=lambda x:x.area_km, reverse=True))
@@ -213,6 +215,8 @@ class Top(commands.Cog):
     @top_nations.command(name="residents", description="Nations ordered by total residents")
     async def _nations_residents(self, interaction : discord.Interaction, highlight : str = None):
 
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+
         world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
         world.nations = list(sorted(world.nations, key=lambda x:x.get_total_residents(), reverse=True))
 
@@ -269,6 +273,8 @@ class Top(commands.Cog):
     
     @top_players.command(name="activity", description="All players who have joined the server while tracking")
     async def _players_activity(self, interaction : discord.Interaction, highlight : str = None):
+
+        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
 
         await interaction.response.defer()
 

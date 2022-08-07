@@ -11,6 +11,8 @@ from shapely.geometry import Point, Polygon
 
 from dynmap.tracking import Tracking
 
+import typing
+
 def save_graph(data : dict, title : str, x : str, y : str, chartType, highlight : int = None):
         
     color = "silver"
@@ -110,6 +112,60 @@ def plot_world(world : world.World, plot_players = False, tracking : Tracking = 
 
     buf = io.BytesIO()
     plt.savefig(buf, facecolor=fig.get_facecolor(), dpi=500)
+    buf.seek(0)
+
+    plt.close()
+
+    return buf
+
+def plot_towns(towns : typing.List[world.Town]):
+
+    xw = 36865
+    yw = 18432
+        
+    color = "silver"
+
+    matplotlib.rcParams['text.color'] = color
+    matplotlib.rcParams['axes.labelcolor'] = color
+    matplotlib.rcParams['xtick.color'] = color
+    matplotlib.rcParams['ytick.color'] = color
+    matplotlib.rcParams["axes.edgecolor"] = color
+    matplotlib.rcParams["xtick.labelsize"] = 7
+
+    fig = plt.figure()
+    fig.patch.set_facecolor('#2F3136')
+
+    for town in towns:
+
+        for point_polygon in town.points:
+
+            points = [(p[0], p[1]) for p in point_polygon]
+
+            poly = Polygon(points)
+            plt.plot(*poly.exterior.xy, linewidth=0.5, color=town.border_color, zorder=3)
+
+            xs, ys = poly.exterior.xy    
+            plt.fill(xs, ys, alpha=0.2, fc=town.fill_color, ec='none')
+
+    plt.xticks(rotation=270)
+
+    ax = plt.gca()
+
+    viewLimX = [ax.viewLim.x0, ax.viewLim.x1]
+    viewLimY = [ax.viewLim.y0, ax.viewLim.y1]
+
+    #img = plt.imread("earth.png")
+    #plt.imshow(img, extent=[0-xw, xw, 0-yw, yw], origin='lower')
+
+    plt.xlim(viewLimX)
+    plt.ylim(viewLimY)
+
+    ax.invert_yaxis()
+
+    plt.axis('off')
+
+    buf = io.BytesIO()
+    plt.savefig(buf, facecolor=fig.get_facecolor(), dpi=500, bbox_inches='tight')
     buf.seek(0)
 
     plt.close()

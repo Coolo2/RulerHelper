@@ -34,6 +34,7 @@ async def on_ready():
 extensions = [file.replace(".py", "") for file in os.listdir('./cmds') if file.endswith(".py")]
 
 async def setup_hook():
+
     for extension in extensions:
         await bot.load_extension(f"cmds.{extension}")
 

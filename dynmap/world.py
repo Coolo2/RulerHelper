@@ -177,7 +177,7 @@ class Town:
         # Bank, founded
 
         self.total_residents = None 
-        self.nation : Nation  = None
+        self.nation : Nation = None
         self.daily_tax = None
         self.bank = None
         self.ruler = None

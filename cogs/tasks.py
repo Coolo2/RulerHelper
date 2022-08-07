@@ -96,6 +96,11 @@ def get_world_task(bot : commands.Bot, client_a : client.Client):
         with open("rulercraft/server_data.json", "w") as f:
             json.dump(server, f)
         
+        td = datetime.date.today()
+        
+        with open(f"rulercraft/server_data_backup_{td.day}_{td.month}_{td.year}.json", "w") as f:
+            json.dump(server, f)
+        
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"{len(world.players)} online players | /info help"))
         
     

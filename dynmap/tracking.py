@@ -59,6 +59,10 @@ class TrackPlayer():
     
     def get_likely_residency(self) -> TrackTown:
         visited = self.get_visited_towns()
+        for town in self.tracking.towns:
+            if town.town and town.town.ruler == self.name:
+                return town 
+        
         return self.tracking.get_town(self.likely_residency_set) or (visited[0] if len(visited) > 0 else None)
 
     

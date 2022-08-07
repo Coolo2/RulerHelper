@@ -1,4 +1,8 @@
+import enum
 import discord
+
+
+
 
 class PaginatorView(discord.ui.View):
 
@@ -47,3 +51,39 @@ class PaginatorView(discord.ui.View):
         embed.set_footer(text=embed.footer.text.replace(f"Page {self.index}", f"Page {self.index+1}"))
             
         await interaction.response.edit_message(embed=embed, view=self)
+    
+    @discord.ui.button(style=discord.ButtonStyle.primary, emoji="🔎")
+    async def _search(self, interaction : discord.Interaction, button : discord.ui.Button):
+
+        await interaction.response.send_modal(SearchModal(self))
+
+class SearchModal(discord.ui.Modal):
+
+    def __init__(self, paginator : PaginatorView):
+
+        self.paginator = paginator
+
+        super().__init__(title="Search", timeout=None)
+    
+    query = discord.ui.TextInput(placeholder='Enter search query here', label="Search Query", required=True, style=discord.TextStyle.short)
+
+    async def on_submit(self, interaction : discord.Interaction):
+
+        for i, page in enumerate(self.paginator.pages):
+            
+            if self.query.value.lower() in page.lower():
+                embed = self.paginator.embed 
+
+                prevIndex = self.paginator.index
+
+                self.paginator.index = i
+                embed.description = self.paginator.pages[self.paginator.index]
+
+                self.paginator.children[1].disabled = self.paginator.index >= len(self.paginator.pages) - 1
+                self.paginator.children[0].disabled = self.paginator.index <= 0
+
+                embed.set_footer(text=embed.footer.text.replace(f"Page {prevIndex+1}", f"Page {self.paginator.index+1}"))
+                    
+                return await interaction.response.edit_message(embed=embed, view=self.paginator)
+        
+        return await interaction.response.send_message("Search query not found.", ephemeral=True)
