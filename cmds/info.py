@@ -53,7 +53,7 @@ class Info(commands.GroupCog, name="info", description="Bot info"):
 
         embed.add_field(name="Tracking time", value=f"{round(tracking.total_tracked_seconds/3600/24)}d")
         embed.add_field(name="Servers", value=str(len(self.bot.guilds)))
-        embed.add_field(name="Database size", value=f"{round(os.path.getsize('rulercraft/server_data.json')/1000/1000, 2)}MB")
+        embed.add_field(name="Database size", value=f"{round(os.path.getsize('rulercraft/server_data.pickle')/1000/1000, 2)}MB")
 
         total_linked_accounts = 0
 

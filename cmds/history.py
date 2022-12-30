@@ -56,14 +56,6 @@ class History(commands.Cog):
 
         view = paginator.PaginatorView(pages, embed)
 
-        await interaction.response.send_message(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
-
     @_bank_history.autocomplete("town")
     async def _town_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
@@ -127,12 +119,6 @@ class History(commands.Cog):
         view = paginator.PaginatorView(pages, embed)
 
         await interaction.followup.send(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
     @_visitors.autocomplete("town")
     async def _visitors_autocomplete(self, interaction : discord.Interaction, current : str):
@@ -173,12 +159,6 @@ class History(commands.Cog):
         view = paginator.PaginatorView(pages, embed)
 
         await interaction.response.send_message(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
     @_residents.autocomplete("town")
     async def _residents_autocomplete(self, interaction : discord.Interaction, current : str):

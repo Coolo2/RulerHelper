@@ -6,7 +6,7 @@ if typing.TYPE_CHECKING:
     from dynmap import tracking
     from dynmap import world as dynmap_w
 
-import json 
+import pickle 
 
 import discord
 
@@ -95,8 +95,11 @@ class Tracking():
 
         self.client = client 
 
-        with open("rulercraft/server_data.json") as f:
-            self.raw = json.load(f)
+        with open("rulercraft/server_data.pickle", "rb") as f:
+            try:
+                self.raw = pickle.load(f)
+            except EOFError:
+                self.raw = {}
         
         self.towns : typing.List[TrackTown] = []
         self.players : typing.List[TrackPlayer] = []

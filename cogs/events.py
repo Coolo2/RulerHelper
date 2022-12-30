@@ -2,6 +2,8 @@
 
 from discord.ext import commands 
 import discord
+import os
+import aiohttp
 
 async def reaction_event(bot : commands.Bot, payload : discord.RawReactionActionEvent):
     if payload.user_id == bot.user.id:
@@ -62,6 +64,13 @@ class Events(commands.Cog):
     @commands.Cog.listener()
     async def on_raw_reaction_remove(self, payload : discord.RawReactionActionEvent):
         await reaction_event(self.bot, payload)
+    
+    @commands.Cog.listener()
+    async def on_guild_join(self, guild : discord.Guild):
+        
+        webhook = discord.Webhook.from_url(os.getenv("webhook"), session=aiohttp.ClientSession())
+
+        await webhook.send(f"New server: `{guild.name}`")
         
 
 async def setup(bot):

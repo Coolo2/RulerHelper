@@ -9,7 +9,7 @@ from dynmap import errors as e
 
 import setup as s
 
-import json
+import pickle
 
 class AcceptView(discord.ui.View):
 
@@ -45,8 +45,11 @@ class AcceptView(discord.ui.View):
                 raise e.MildError("Town does not exist.")
 
         if self.accept_type == "likely_residency":
-            with open("rulercraft/server_data.json") as f:
-                server = json.load(f)
+            with open("rulercraft/server_data.pickle", "rb") as f:
+                try:
+                    server = pickle.load(f)
+                except EOFError:
+                    server = {}
 
             if tracking_player.name not in server["players"]:
                 server["players"][tracking_player.name] = {}
@@ -57,8 +60,8 @@ class AcceptView(discord.ui.View):
                 if "likely_residency" in server["players"][tracking_player.name]:
                     del server["players"][tracking_player.name]["likely_residency"]
             
-            with open("rulercraft/server_data.json", "w") as f:
-                json.dump(server, f)
+            with open("rulercraft/server_data.pickle", "wb") as f:
+                pickle.dump(server, f)
             
             button.disabled = True
             
@@ -67,16 +70,19 @@ class AcceptView(discord.ui.View):
             
         else:
 
-            with open("rulercraft/server_data.json") as f:
-                server = json.load(f)
+            with open("rulercraft/server_data.pickle", "rb") as f:
+                try:
+                    server = pickle.load(f)
+                except EOFError:
+                    server = {}
 
             if tracking_player.name not in server["players"]:
                 server["players"][tracking_player.name] = {}
             
             server["players"][tracking_player.name]["discord_id"] = self.discord_id
             
-            with open("rulercraft/server_data.json", "w") as f:
-                json.dump(server, f)
+            with open("rulercraft/server_data.pickle", "wb") as f:
+                pickle.dump(server, f)
             
             button.disabled = True
             
@@ -206,8 +212,11 @@ class Mod(commands.Cog):
         if not tracking_player:
             raise e.MildError("Player not found! They have to have joined the server recently to be added.")
         
-        with open("rulercraft/server_data.json") as f:
-            server = json.load(f)
+        with open("rulercraft/server_data.pickle", "rb") as f:
+            try:
+                server = pickle.load(f)
+            except EOFError:
+                server = {}
 
         if player not in server["players"]:
             server["players"][player] = {}
@@ -218,8 +227,8 @@ class Mod(commands.Cog):
             if "likely_residency" in server["players"][player]:
                 del server["players"][player]["likely_residency"]
         
-        with open("rulercraft/server_data.json", "w") as f:
-            json.dump(server, f)
+        with open("rulercraft/server_data.pickle", "wb") as f:
+            pickle.dump(server, f)
         
         return await interaction.response.send_message(
             embed=discord.Embed(
@@ -257,16 +266,19 @@ class Mod(commands.Cog):
         if not tracking_player:
             raise e.MildError("Player not found! They have to have joined the server recently to be added.")
         
-        with open("rulercraft/server_data.json") as f:
-            server = json.load(f)
+        with open("rulercraft/server_data.pickle", "rb") as f:
+            try:
+                server = pickle.load(f)
+            except EOFError:
+                server = {}
 
         if minecraft_name not in server["players"]:
             server["players"][minecraft_name] = {}
         
         server["players"][minecraft_name]["discord_id"] = discord_id
         
-        with open("rulercraft/server_data.json", "w") as f:
-            json.dump(server, f)
+        with open("rulercraft/server_data.pickle", "wb") as f:
+            pickle.dump(server, f)
         
         return await interaction.response.send_message(
             embed=discord.Embed(

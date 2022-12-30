@@ -75,12 +75,6 @@ class Top(commands.Cog):
         view = paginator.PaginatorView(pages, embed)
 
         await interaction.response.send_message(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
     @_towns_activity.autocomplete("highlight")
     async def _towns_activity_autocomplete(self, interaction : discord.Interaction, current : str):
@@ -134,12 +128,6 @@ class Top(commands.Cog):
         view = paginator.PaginatorView(pages, embed)
 
         await interaction.response.send_message(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
 
     @_towns_residents.autocomplete("highlight")
@@ -193,12 +181,6 @@ class Top(commands.Cog):
         view = paginator.PaginatorView(pages, embed)
 
         await interaction.response.send_message(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
 
     @_towns_area.autocomplete("highlight")
@@ -254,12 +236,6 @@ class Top(commands.Cog):
         view = paginator.PaginatorView(pages, embed)
 
         await interaction.response.send_message(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
 
     @_nations_residents.autocomplete("highlight")
@@ -322,12 +298,6 @@ class Top(commands.Cog):
         view = paginator.PaginatorView(pages, embed)
 
         await interaction.followup.send(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
     @_players_activity.autocomplete("highlight")
     async def _top_players_highlight(self, interaction : discord.Interaction, current : str):

@@ -1,4 +1,6 @@
 
+
+import pickle 
 import discord 
 from discord.ext import commands, tasks 
 from dynmap import client
@@ -6,7 +8,6 @@ import datetime
 
 import asyncio
 
-import json
 from dynmap import world as dynmap_w
 
 nearby_players = {}
@@ -27,8 +28,11 @@ def get_world_task(bot : commands.Bot, client_a : client.Client):
         global prev_players
         global nearby_players
 
-        with open("rulercraft/server_data.json") as f:
-            server = json.load(f)
+        with open("rulercraft/server_data.pickle", "rb") as f:
+            try:
+                server = pickle.load(f)
+            except EOFError:
+                server = {}
 
         if "total_tracked" not in server:
             server["total_tracked"] = 90000
@@ -93,13 +97,13 @@ def get_world_task(bot : commands.Bot, client_a : client.Client):
 
         prev_players = world.players
 
-        with open("rulercraft/server_data.json", "w") as f:
-            json.dump(server, f)
+        with open("rulercraft/server_data.pickle", "wb") as f:
+            pickle.dump(server, f)
         
         td = datetime.date.today()
         
-        with open(f"rulercraft/server_data_backup_{td.day}_{td.month}_{td.year}.json", "w") as f:
-            json.dump(server, f)
+        with open(f"rulercraft/server_data_backup_{td.day}_{td.month}_{td.year}.pickle", "wb") as f:
+            pickle.dump(server, f)
         
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"{len(world.players)} online players | /info help"))
         

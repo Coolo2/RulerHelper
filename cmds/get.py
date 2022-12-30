@@ -58,13 +58,6 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         view = paginator.PaginatorView(pages, embed)
 
         await interaction.followup.send(embed=embed, view=view, file=graph)
-
-        msg = await interaction.original_message()
-        
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
     @app_commands.command(name="player", description="Get info for a specific player")
     async def _player(self, interaction : discord.Interaction, player : str):
@@ -148,14 +141,6 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         await interaction.followup.send(embed=embed, file=graph)
 
-        msg = await interaction.original_message()
-
-        view = discord.ui.View()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].thumbnail.url, row=2))
-        await msg.edit(
-            view=view
-        )
-
     @_town.autocomplete("town")
     async def _town_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
@@ -221,13 +206,6 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         await interaction.followup.send(embed=embed, view=view, file=graph)
 
-        msg = await interaction.original_message()
-
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].thumbnail.url, row=2))
-        await msg.edit(
-            view=view
-        )
-
     @_nation.autocomplete("nation")
     async def _nation_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
@@ -272,14 +250,6 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.add_field(name="Total residents", value=f"{total_residents:,d} ({known_players:,d} known)")
 
         await interaction.followup.send(embed=embed, file=graph)
-
-        msg = await interaction.original_message()
-
-        view = discord.ui.View()
-        view.add_item(discord.ui.Button(style=discord.ButtonStyle.url, label="Copy/Zoom Image", url=msg.embeds[0].image.url, row=2))
-        await msg.edit(
-            view=view
-        )
     
 
 async def setup(bot : commands.Bot):
