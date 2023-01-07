@@ -31,7 +31,7 @@ dict = {
                 "See people who have spent the most time in a town, along with a list of everyone who ever joined.",
                 "[town]"
             ],
-            "total_residents":[
+            "residents":[
                 "A graph of the total resident count of a town over time.",
                 "[town]"
             ]
@@ -43,7 +43,7 @@ dict = {
                 "Rank top towns by the total online time of players in its borders",
                 "*[highlight_town]"
             ],
-            "total_residents":[
+            "residents":[
                 "Rank top towns by the total resident count",
                 "*[highlight_town]"
             ],
@@ -53,7 +53,7 @@ dict = {
             ]
         },
         "nations":{
-            "total_residents":[
+            "residents":[
                 "Rank top nations by total resident count",
                 "*[highlight_nation]"
             ],
@@ -65,14 +65,22 @@ dict = {
             ],
         }
     },
-    "request":{
-        "likely_residency_change":[
-            "Request for the likely residency on **/get player** to be changed for a player (your own name, or another if it's valid) by Bot Moderators. Using argument 'None' reverts to automatic detection",
-            "[player] [town]"
+    "notifications":{
+        "enable":[
+            "Enable notifications in a certain channel",
+            "[notification_type] [channel] [nation]"
         ],
-        "discord_link":[
-            "Request for your Discord account to be linked to your **/get player** profile by Bot Moderators. There is some automatic detection however linking it is a more secure way. Allows people to search for you from your Minecraft name.",
-            "[minecraft_name]"
+        "disable":[
+            "Disable notifications in a certain channel",
+            "[channel]"
+        ],
+        "config view":[
+            "View config for a channel",
+            "[channel]"
+        ],
+        "config set":[
+            "Set a configuration value in a channel",
+            "[channel] nation={nation} enable_setting={setting} disable_setting={setting}"
         ]
     },
     "poll":{
@@ -83,6 +91,16 @@ dict = {
         "poll":[
             "A simple yes or no poll showing percentage stats on reactions",
             "[question]"
+        ]
+    },
+    "request":{
+        "likely_residency_change":[
+            "Request for the likely residency on **/get player** to be changed for a player (your own name, or another if it's valid) by Bot Moderators. Using argument 'None' reverts to automatic detection",
+            "[player] [town]"
+        ],
+        "discord_link":[
+            "Request for your Discord account to be linked to your **/get player** profile by Bot Moderators. There is some automatic detection however linking it is a more secure way. Allows people to search for you from your Minecraft name.",
+            "[minecraft_name]"
         ]
     },
     "info":{

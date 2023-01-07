@@ -1,6 +1,8 @@
 
 
 import asyncio, nest_asyncio
+import discord
+from discord.ext import commands
 
 from dynmap import http
 from dynmap import world
@@ -9,7 +11,7 @@ from dynmap import tracking
 import typing
 
 class Client():
-    def __init__(self, bot, url : str):
+    def __init__(self, bot : typing.Union[discord.Client, commands.Bot], url : str):
         self.url = url
 
         self.loop = asyncio.get_event_loop()
@@ -19,7 +21,7 @@ class Client():
 
         self.http : http.HTTP = http.HTTP(self)
 
-        self.cached_worlds : typing.Dict({str:world.World}) = {}
+        self.cached_worlds : typing.Dict[str, world.World] = {}
     
     async def get_world(self, name : str) -> world.World:
 

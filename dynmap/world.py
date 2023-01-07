@@ -34,7 +34,8 @@ class Player:
 
         self.avatar = f"{client.url}/tiles/faces/32x32/{self.name}.png"
     
-    def get_current_town(self) -> dynmap_w.Town:
+    @property
+    def current_town(self) -> dynmap_w.Town:
 
         world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
 
@@ -48,10 +49,17 @@ class Player:
     
 
 class Nation:
-    def __init__(self, world, name : str):
+    def __init__(self, world : dynmap_w.World, name : str):
         self.name = name 
 
         self.world = world
+    
+    @property 
+    def capital(self) -> dynmap_w.Town:
+        for town in self.towns:
+            if town.icon == "king":
+                return town 
+        return None
     
     @property 
     def name_formatted(self):
@@ -62,12 +70,13 @@ class Nation:
         
         total_area = 0
 
-        for town in self.get_towns():
+        for town in self.towns:
             total_area += town.area_km
 
         return total_area
     
-    def get_towns(self) -> typing.List[dynmap_w.Town]:
+    @property 
+    def towns(self) -> typing.List[dynmap_w.Town]:
         towns = []
 
         for town in self.world.towns:
@@ -76,9 +85,10 @@ class Nation:
         
         return towns
     
-    def get_total_residents(self):
+    @property 
+    def total_residents(self):
         total_residents = 0
-        for town in self.get_towns():
+        for town in self.towns:
             if town.total_residents:
                 total_residents += town.total_residents
             
@@ -234,7 +244,8 @@ class Town:
         
         return False
 
-    def get_near_players(self) -> typing.List[Player]:
+    @property
+    def near_players(self) -> typing.List[Player]:
 
         players : typing.List[Player] = []
 
@@ -257,6 +268,20 @@ class World():
         self.client = client
 
         self._parse_data(data, map_data)
+
+    @property 
+    def total_residents(self) -> int:
+        total = 0
+        for town in self.towns:
+            total += town.total_residents
+        return total
+    
+    @property 
+    def total_area_km(self) -> float:
+        total = 0
+        for town in self.towns:
+            total += town.area_km
+        return total
 
     def _parse_data(self, data : dict, map_data : dict):
 

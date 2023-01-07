@@ -28,7 +28,7 @@ class History(commands.Cog):
     @history_town.command(name="bank", description="Bank history over time")
     async def _bank_history(self, interaction : discord.Interaction, town : str):
 
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+        #print_here
 
         tracking = self.client.get_tracking()
         town : dynmap_t.TrackTown = tracking.get_town(town.replace(" ", "_"), case_sensitive=False)
@@ -45,16 +45,11 @@ class History(commands.Cog):
 
         embed = discord.Embed(title="Town Bank History", color=s.embed)
         embed.set_image(url="attachment://town_bank_graph.png")
+        embed.set_footer(text=f"*Server tracking started {int(tracking.total_tracked_seconds/3600/24)} days ago.")
 
-        per_page = 10
+        view = paginator.PaginatorView(embed, description_string)
 
-        pages = description_string.split("\n")
-        pages = ["\n".join(pages[i:i+per_page]) for i in range(0, len(pages), per_page)]
-
-        embed.description = pages[0]
-        embed.set_footer(text=f"*Server tracking started {round(tracking.total_tracked_seconds/3600/24)} days ago.")
-
-        view = paginator.PaginatorView(pages, embed)
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
 
     @_bank_history.autocomplete("town")
     async def _town_autocomplete(self, interaction : discord.Interaction, current : str):
@@ -66,7 +61,7 @@ class History(commands.Cog):
     @history_town.command(name="visitors", description="All players who visited the town")
     async def _visitors(self, interaction : discord.Interaction, town : str):
 
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+        #print_here
 
         await interaction.response.defer()
 
@@ -107,18 +102,11 @@ class History(commands.Cog):
     
         embed = discord.Embed(title=f"Town historic visitors ({len(town.visited)})", color=s.embed)
         embed.set_image(url="attachment://town_visitors_graph.png")
+        embed.set_footer(text=f"*Server tracking started {int(tracking.total_tracked_seconds/3600/24)} days ago.")
 
-        per_page = 10
+        view = paginator.PaginatorView(embed, description_string)
 
-        pages = description_string.split("\n")
-        pages = ["\n".join(pages[i:i+per_page]) for i in range(0, len(pages), per_page)]
-
-        embed.description = pages[0]
-        embed.set_footer(text=f"*Server tracking started {round(tracking.total_tracked_seconds/3600/24)} days ago.")
-
-        view = paginator.PaginatorView(pages, embed)
-
-        await interaction.followup.send(embed=embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
     @_visitors.autocomplete("town")
     async def _visitors_autocomplete(self, interaction : discord.Interaction, current : str):
@@ -127,10 +115,10 @@ class History(commands.Cog):
             for t in self.client.cached_worlds["RulerEarth"].towns if current.lower().replace("_", " ") in t.name_formatted.lower()
         ][:25]
     
-    @history_town.command(name="total_residents", description="A total of residents for a town over time")
+    @history_town.command(name="residents", description="A total of residents for a town over time")
     async def _residents(self, interaction : discord.Interaction, town : str):
 
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+        #print_here
 
         tracking = self.client.get_tracking()
         town : dynmap_t.TrackTown = tracking.get_town(town.replace(" ", "_"), case_sensitive=False)
@@ -147,18 +135,11 @@ class History(commands.Cog):
 
         embed = discord.Embed(title="Town resident count", color=s.embed)
         embed.set_image(url="attachment://town_resident_history.png")
+        embed.set_footer(text=f"*Server tracking started {int(tracking.total_tracked_seconds/3600/24)} days ago.")
 
-        per_page = 10
+        view = paginator.PaginatorView(embed, description_string)
 
-        pages = description_string.split("\n")
-        pages = ["\n".join(pages[i:i+per_page]) for i in range(0, len(pages), per_page)]
-
-        embed.description = pages[0]
-        embed.set_footer(text=f"*Server tracking started {round(tracking.total_tracked_seconds/3600/24)} days ago.")
-
-        view = paginator.PaginatorView(pages, embed)
-
-        await interaction.response.send_message(embed=embed, view=view, file=graph)
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
     
     @_residents.autocomplete("town")
     async def _residents_autocomplete(self, interaction : discord.Interaction, current : str):

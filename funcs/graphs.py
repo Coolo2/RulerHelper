@@ -150,15 +150,7 @@ def plot_towns(towns : typing.List[world.Town]):
     plt.xticks(rotation=270)
 
     ax = plt.gca()
-
-    viewLimX = [ax.viewLim.x0, ax.viewLim.x1]
-    viewLimY = [ax.viewLim.y0, ax.viewLim.y1]
-
-    #img = plt.imread("earth.png")
-    #plt.imshow(img, extent=[0-xw, xw, 0-yw, yw], origin='lower')
-
-    plt.xlim(viewLimX)
-    plt.ylim(viewLimY)
+    ax.set_aspect('equal', adjustable='box')
 
     ax.invert_yaxis()
 

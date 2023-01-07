@@ -19,7 +19,7 @@ class TrackTown():
         self.world : dynmap_w.World = tracking.client.cached_worlds['RulerEarth']
         self.town : dynmap_w.Town = self.world.get_town(name)
 
-        self.bank_history = data["bank_history"]
+        self.bank_history : typing.Dict[str, float] = data["bank_history"]
         self.total_residents_history = data["total_residents_history"] if "total_residents_history" in data else {}
         self.visited = {}
 
@@ -84,7 +84,7 @@ class TrackPlayer():
             guild : discord.Guild = guild
 
             for member in guild.members:
-                if str(self.name).lower().replace(".", "") in str(member.nick).lower().replace(".", "") or str(self.name).lower().replace(".", "") in str(member.name).lower().replace(".", ""):
+                if str(self.name).lower().replace(".", "") in str(member.nick).lower() or str(self.name).lower().replace(".", "") in str(member.name).lower():
                     return member.id 
         
         return self.discord_id_set
@@ -97,7 +97,7 @@ class Tracking():
 
         with open("rulercraft/server_data.pickle", "rb") as f:
             try:
-                self.raw = pickle.load(f)
+                self.raw : typing.Dict[str, dict] = pickle.load(f)
             except EOFError:
                 self.raw = {}
         

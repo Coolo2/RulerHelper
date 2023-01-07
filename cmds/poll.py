@@ -19,7 +19,7 @@ class Poll(commands.GroupCog, name="poll", description="All poll commands"):
     @app_commands.command(name="poll", description="A simple yes/no poll")
     async def _poll(self, interaction : discord.Interaction, question : str):
 
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+        #print_here
 
         embed = discord.Embed(title=f"Poll from {interaction.user}", description=f'*{question}*', color=s.embed)
         embed.add_field(name="Stats", value="For: **0**\nAgainst: **0**\nFor%: **0%**")
@@ -47,7 +47,7 @@ class Poll(commands.GroupCog, name="poll", description="All poll commands"):
         choice9 : str = None,
         choice10 : str = None,
     ):
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+        #print_here
         
         choices = [choice1, choice2, choice3, choice4, choice5, choice6, choice7, choice8, choice9, choice10]
         emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]

@@ -8,43 +8,57 @@ import dynmap
 
 import setup as s
 from funcs import cmds
+from funcs.components import paginator
+import typing
 
 class Info(commands.GroupCog, name="info", description="Bot info"):
 
     def __init__(self, bot : commands.Bot, client : dynmap.Client):
         self.bot = bot
         self.client = client
+
+        self.cmd_list : typing.List[app_commands.AppCommand] = None
     
     @app_commands.command(name="help", description="Get a list of bot commands with a description of their function")
     async def _help(self, interaction : discord.Interaction):
-
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
-
-        embed = discord.Embed(title="Ruler Help", description="Ruler Helper is a Discord Bot for everything RulerCraft. See its commands below.", color=s.embed)
-
-        for full_cmd_name, full_cmd in cmds.dict.items():
-            if type(full_cmd) == dict:
-                desc_for_field = ""
-
-                for sub_command_name, sub_command in full_cmd.items():
-                    if type(sub_command) == dict:
-                        for sub_sub_command_name, sub_sub_command in sub_command.items():
-                            desc_for_field += f"**/{full_cmd_name} {sub_command_name} {sub_sub_command_name} {sub_sub_command[1] if len(sub_sub_command) > 1 else ''}** - {sub_sub_command[0]}\n"
-                    else:
-                        desc_for_field += f"**/{full_cmd_name} {sub_command_name} {sub_command[1] if len(sub_command) > 1 else ''}** - {sub_command[0]}\n"
-                
-                embed.add_field(name=f"/{full_cmd_name}", value=desc_for_field, inline=False)
-            else:
-                embed.add_field(name=f"/{full_cmd_name} {full_cmd[1] if len(full_cmd) > 1 else ''}", value=full_cmd[0], inline=False)
+        cmd_list = self.cmd_list = self.cmd_list or await self.bot.tree.fetch_commands()
         
-        await interaction.response.send_message(embed=embed)
+        #print_here
+
+        embed = discord.Embed(title="Ruler Help", color=s.embed)
+        content = ""
+
+        # Home
+        for full_cmd in cmd_list:
+            content += f"\n**/{full_cmd.name}**\n"
+            for sub_command in full_cmd.options:
+                if type(sub_command) == app_commands.models.Argument:
+                    continue
+                content += f"- </{full_cmd.name} {sub_command.name}:{full_cmd.id}>\n"
+                for sub_sub_command in sub_command.options:
+                    if type(sub_sub_command) == app_commands.models.Argument:
+                        continue
+                    content += f"•  </{full_cmd.name} {sub_command.name} {sub_sub_command.name}:{full_cmd.id}>\n"
+
+        content += "newpage"
+        for full_cmd in cmd_list:
+            content += f"\n/{full_cmd.name}\n"
+            for sub_command_name, sub_command in cmds.dict[full_cmd.name].items():
+                content += f"\n- </{full_cmd.name} {sub_command_name}:{full_cmd.id}>"
+                if type(sub_command) == dict:
+                    for sub_sub_command_name, sub_sub_command in sub_command.items():
+                        content += f"\n• </{full_cmd.name} {sub_command_name} {sub_sub_command_name}:{full_cmd.id}> - {sub_sub_command[0]}"
+                else:
+                    content += f" - {sub_command[0]}"
+            
+            content += "newpage"
+
+        view = paginator.PaginatorView(embed, content, "newpage", 1)
+        await interaction.response.send_message(embed=view.embed, view=view)
     
     @app_commands.command(name="info", description="Get basic info and stats about the bot")
     async def _info(self, interaction : discord.Interaction):
-
-        
-
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+        #print_here
             
 
         tracking = self.client.get_tracking()

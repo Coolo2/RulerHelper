@@ -102,7 +102,7 @@ class Request(commands.GroupCog, name="request", description="Request something 
     @app_commands.describe(town="Can be set to 'None' to remove.")
     async def _request_likely_residency_change(self, interaction : discord.Interaction, player : str, town : str):
 
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+        #print_here
 
         if town == "None":
             town = None 
@@ -152,7 +152,7 @@ class Request(commands.GroupCog, name="request", description="Request something 
     @app_commands.command(name="discord_link", description="Link Discord and MC name. Allows people to search for your discord name")
     async def _request_discord_link(self, interaction : discord.Interaction, minecraft_name : str):
 
-        print(f"{interaction.user} {interaction.guild.name if interaction.guild else ''} #{interaction.channel.name if hasattr(interaction.channel, 'name') else ''} {interaction.command.name} {interaction.expires_at}")
+        #print_here
 
         tracking_player = self.client.get_tracking().get_player(minecraft_name)
         if not tracking_player:
