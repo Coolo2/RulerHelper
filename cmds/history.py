@@ -12,8 +12,7 @@ from dynmap import tracking as dynmap_t
 from dynmap import errors as e
 
 from funcs.components import paginator
-from funcs import graphs
-from funcs import functions
+from funcs import graphs, functions, autocompletes
 import setup as s
 
 class History(commands.Cog):
@@ -24,6 +23,7 @@ class History(commands.Cog):
     
     history = app_commands.Group(name="history", description="Get historic statistics for towns and players")
     history_town = app_commands.Group(name='town', parent = history, description='History for town stats')
+    history_player = app_commands.Group(name="player", parent=history, description="History for players")
 
     @history_town.command(name="bank", description="Bank history over time")
     async def _bank_history(self, interaction : discord.Interaction, town : str):
@@ -78,7 +78,8 @@ class History(commands.Cog):
             bold = ""
             if data['last'] + 30 >= datetime.datetime.now().timestamp():
                 bold = "**"
-            likely_residency = self.client.get_tracking().get_player(name).get_likely_residency()
+            r = self.client.get_tracking().get_player(name)
+            likely_residency = r.get_likely_residency() if r else None
             rsTag = ""
             if likely_residency and likely_residency.town and likely_residency.town.name == town.town.name:
                 rsTag = "`[R]` "
@@ -147,6 +148,54 @@ class History(commands.Cog):
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
             for t in self.client.cached_worlds["RulerEarth"].towns if current.lower().replace("_", " ") in t.name_formatted.lower()
         ][:25]
+    
+    @history_player.command(name="visited_towns", description="History for towns this player has visited")
+    @app_commands.autocomplete(player=autocompletes.player_autocomplete)
+    async def _visited_towns(self, interaction : discord.Interaction, player : str):
+
+        #print_here
+
+        await interaction.response.defer()
+
+        tracking = self.client.get_tracking()
+        player : dynmap_t.TrackPlayer = tracking.get_player(player, case_sensitive=False)
+
+        if not player:
+            raise e.MildError("Player not found")
+
+        visited = player.visited
+        visited = dict(sorted(visited.items(), key=lambda x: x[1]["total"], reverse=True))
+
+        description_string = ""
+        for i, (town_name, data) in enumerate(visited.items()):
+            bold = ""
+            if data['last'] + 30 >= datetime.datetime.now().timestamp():
+                bold = "**"
+
+            description_string += f"{i+1}. {bold}{town_name}{bold}: `{functions.generate_time(data['total'])}` <t:{round(data['last'])}:R>\n"
+
+        plottable = {}
+        for town_name, activity in visited.items():
+            plottable[town_name] = activity["total"] / 60
+
+        plottable = dict(graphs.take(25, plottable.items()))
+
+        file_name = graphs.save_graph(
+            plottable, 
+            f"{player.name} visited towns (by time)", 
+            "Town", 
+            "Minutes visiting", 
+            plt.bar
+        )
+        graph = discord.File(file_name, filename="player_visited_graph.png")
+    
+        embed = discord.Embed(title=f"Player visited towns ({len(visited)})", color=s.embed)
+        embed.set_image(url="attachment://player_visited_graph.png")
+        embed.set_footer(text=f"*Server tracking started {int(tracking.total_tracked_seconds/3600/24)} days ago.")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
 
     
 async def setup(bot : commands.Bot):

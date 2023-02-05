@@ -47,6 +47,16 @@ class Player:
 
         return nearby_town
     
+    def __eq__(self, other):
+        if other and other.name == self.name:
+            return True 
+        return False
+    
+    def to_dict(self):
+        return {
+            "name":self.name, "health":self.health, "armor":self.armor, "coordinates":[self.x, self.y, self.z], "avatar":self.avatar
+        }
+    
 
 class Nation:
     def __init__(self, world : dynmap_w.World, name : str):
@@ -93,6 +103,23 @@ class Nation:
                 total_residents += town.total_residents
             
         return total_residents
+    
+    @property 
+    def total_bank(self) -> float:
+        total_bank = 0
+        for town in self.towns:
+            if town.total_residents:
+                total_bank += town.bank
+            
+        return total_bank
+    
+    def __eq__(self, other):
+        if other and other.name == self.name:
+            return True 
+        return False
+    
+    def to_dict(self):
+        return {"name":self.name, "total_residents":self.total_residents, "towns":[t.name for t in self.towns], "plots":round((self.area_km*(1000^2))/256), "capital":self.capital.name}
 
 class Town:
 
@@ -123,7 +150,33 @@ class Town:
         self.z : int = None 
         self.icon : str = None 
 
+        self.total_residents : int = None 
+        self.nation : Nation = None
+        self.daily_tax : float = None
+        self.bank : float = None
+        self.ruler : str = None
+        self.peaceful : bool = None
+        self.founded : datetime.date = None
+        self.culture : str = None
+
         self._parse_desc()
+    
+    def towns_within_range(self, blocks : int) -> typing.List[dynmap_w.Town]:
+        towns = []
+        for town in self.world.towns:
+            distance = math.sqrt((town.x - self.x)**2 + (town.z - self.z)**2)
+            if distance <= blocks:
+                towns.append(town)
+        
+        return towns
+
+    @property 
+    def age(self) -> int:
+        return (datetime.date.today() - self.founded).days
+
+    @property 
+    def mayor(self) -> dynmap_w.Player:
+        return self.world.get_player(self.ruler)
     
     @property 
     def name_formatted(self):
@@ -184,14 +237,6 @@ class Town:
     def _parse_desc(self):
         desc = self.desc 
 
-        # Bank, founded
-
-        self.total_residents = None 
-        self.nation : Nation = None
-        self.daily_tax = None
-        self.bank = None
-        self.ruler = None
-
         if not desc:
             return
 
@@ -207,9 +252,9 @@ class Town:
                 except:
                     pass
             
-            if tag.string and "Daily Tax:" in tag.string:
+            if tag.string and "Resident Tax:" in tag.string:
                 try:
-                    self.daily_tax = float(tag.parent.get_text().split("Daily Tax: ")[1].replace("%", ""))
+                    self.daily_tax = float(tag.parent.get_text().split("Resident Tax: ")[1].replace("%", ""))
                 except:
                     pass
             
@@ -228,7 +273,31 @@ class Town:
             if tag.get_text() and "🎌 " in tag.get_text():
                 
                 try:
-                    self.nation = Nation(self.world, tag.get_text().split(" ")[1])
+                    if tag.get_text().split(" ")[1].replace(" ", "") == "":
+                        self.nation = None
+                    else:
+                        self.nation = Nation(self.world, tag.get_text().split(" ")[1])
+                except:
+                    pass
+                    
+            if tag.string and "Peaceful:" in tag.string:
+                try:
+                    self.peaceful = tag.parent.get_text().split("Peaceful: ")[1]
+                    self.peaceful = True if self.peaceful == "true" else False
+                except:
+                    pass
+
+            if tag.string and "Founded:" in tag.string:
+                try:
+                    self.founded = datetime.datetime.strptime(tag.parent.get_text().split("Founded: ")[1], "%b %d %Y").date()
+                except:
+                    pass
+            
+            if tag.string and "🕎 Culture -" in tag.string:
+                try:
+                    self.culture = tag.parent.get_text().split("🕎 Culture - ")[1]
+                    if self.culture.replace(" ", "") == "":
+                        self.culture = None
                 except:
                     pass
     
@@ -257,7 +326,24 @@ class Town:
         
         return players
 
-
+    def __eq__(self, other):
+        if other and other.name == self.name:
+            return True 
+        return False
+    
+    def to_dict(self):
+        return {
+            "name":self.name,
+            "mayor":self.ruler,
+            "bank":self.bank,
+            "border_color":self.border_color,
+            "fill_color":self.fill_color,
+            "total_residents":self.total_residents,
+            "taxes":self.daily_tax,
+            "nation":self.nation.name if self.nation else None,
+            "spawn":[self.x, self.y, self.z],
+            "icon":self.icon
+        }
 
 
 
@@ -281,6 +367,13 @@ class World():
         total = 0
         for town in self.towns:
             total += town.area_km
+        return total
+    
+    @property 
+    def total_town_bank(self) -> float:
+        total = 0
+        for town in self.towns:
+            total += town.bank
         return total
 
     def _parse_data(self, data : dict, map_data : dict):
@@ -338,11 +431,18 @@ class World():
 
         return None    
     
-    def get_nation(self, name : str, case_sensitive = True):
+    def get_nation(self, name : str, case_sensitive = True) -> dynmap_w.Nation:
         for nation in self.nations:
             if nation.name == name or (not case_sensitive and nation.name.lower() == name.lower()):
                 return nation 
 
         return None   
+    
+    def to_dict(self):
+        return {
+            "players":[p.to_dict() for p in self.players],
+            "towns":[t.to_dict() for t in self.towns],
+            "nations":[n.to_dict() for n in self.nations]
+        }
     
     

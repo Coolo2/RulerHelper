@@ -9,6 +9,7 @@ if typing.TYPE_CHECKING:
 import pickle 
 
 import discord
+import datetime
 
 class TrackTown():
 
@@ -29,7 +30,16 @@ class TrackTown():
         
         self.visited = dict(sorted(self.visited.items(), key=lambda x: x[1]["last"], reverse=True))
     
-    def get_total_activity(self):
+    def __eq__(self, other):
+        if not self.town and not other:
+            return True
+        if other and self.town and other.name == self.town.name:
+            return True 
+        return False
+
+    
+    @property
+    def total_activity(self) -> int:
 
         total = 0 
 
@@ -37,6 +47,17 @@ class TrackTown():
             total += v["total"]
         
         return total
+    
+    @property
+    def last_activity_timestamp(self) -> int:
+
+        greatest = 0 
+
+        for v in self.visited.values():
+            if v["last"] > greatest:
+                greatest = round(v["last"])
+        
+        return greatest
     
     
 
@@ -58,25 +79,41 @@ class TrackPlayer():
         self.discord_id_set : int = data["discord_id"] if "discord_id" in data else None
     
     def get_likely_residency(self) -> TrackTown:
-        visited = self.get_visited_towns()
-        for town in self.tracking.towns:
+        visited : typing.List[str] = self.visited.keys()
+
+        for town_name in visited:
+            town = self.tracking.get_town(town_name)
+
             if town.town and town.town.ruler == self.name:
                 return town 
         
-        return self.tracking.get_town(self.likely_residency_set) or (visited[0] if len(visited) > 0 else None)
+        return self.tracking.get_town(self.likely_residency_set) or (self.tracking.get_town(visited[0]) if len(visited) > 0 else None)
 
-    
-    def get_visited_towns(self) -> typing.List[TrackTown]:
+    @property 
+    def town(self) -> tracking.TrackTown:
+        return self.tracking.get_town(self.last_town)
+
+    @property
+    def visited(self) -> typing.Dict[str, int]:
         
-        visited_towns : typing.List[TrackTown] = []
+        visited_towns = {}
 
         for town in self.tracking.towns:
             if self.name in town.visited:
-                visited_towns.append(town)
+                if town.town:
+                    visited_towns[town.town.name] = town.visited[self.name]
         
-        visited_towns = list(sorted(visited_towns, key=lambda x: x.visited[self.name]["total"], reverse=True))
+        visited_towns = dict(sorted(visited_towns.items(), key=lambda x: x[1]["total"], reverse=True))
         
         return visited_towns
+    
+    @property 
+    def is_mayor(self) -> bool:
+        for town in self.tracking.towns:
+            if town.town:
+                if town.town.ruler == self.name:
+                    return True 
+        return False
     
     def find_discord(self):
 
@@ -111,6 +148,8 @@ class Tracking():
         
         for player_name, player in self.raw["players"].items():
             self.players.append(TrackPlayer(self, player_name, player))
+        
+        self.last : datetime.datetime = datetime.datetime.fromtimestamp(self.raw["last"])
     
     def get_town(self, town_name : str, case_sensitive = True) -> TrackTown:
         
@@ -119,10 +158,10 @@ class Tracking():
                 return town 
         return None
     
-    def get_player(self, player_name : str) -> TrackPlayer:
+    def get_player(self, player_name : str, case_sensitive = True) -> TrackPlayer:
         
         for player in self.players:
-            if player.name == player_name:
+            if player.name == player_name or (not case_sensitive and player.name.lower() == player_name.lower()):
                 return player 
         return None
         

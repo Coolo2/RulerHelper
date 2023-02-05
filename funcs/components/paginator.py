@@ -1,17 +1,40 @@
 import enum
 import discord
+import typing
 
 class PaginatorView(discord.ui.View):
 
-    def __init__(self, embed : discord.Embed, text : str, split_character : str = "\n", per_page : int = 10, index : int = 0, private = None):
+    def __init__(
+                self, 
+                embed : discord.Embed, 
+                text : str, 
+                split_character : str = "\n", 
+                per_page : int = 10, 
+                index : int = 0, 
+                private = None, 
+                page_image_generators : typing.List[typing.Tuple[typing.Callable, tuple]] = [],
+                search : bool = True
+    ):
         self.embed = embed
         self.index = index
         self.private : discord.User = private
+        self.page_image_generators = page_image_generators
+        self.attachment = None
+
+        if len(page_image_generators) > 0 and page_image_generators[0]:
+            generator = self.page_image_generators[self.index]
+            
+            if type(generator) == str:
+                embed.set_image(url=generator)
+            else:
+                image = generator[0](*generator[1])
+                graph = discord.File(image, filename="paginator_image.png")
+                self.attachment = graph
+                embed.set_image(url="attachment://paginator_image.png")
 
         pages = text.split(split_character)
         
         self.pages = [split_character.join(pages[i:i+per_page]) for i in range(0, len(pages), per_page)]
-        print(self.pages)
         self.embed.description = self.pages[0]
 
         if self.embed.footer.text and "Page " not in self.embed.footer.text:
@@ -19,11 +42,13 @@ class PaginatorView(discord.ui.View):
         else:
             self.embed.set_footer(text=f"Page {self.index+1}/{len(self.pages)}")
 
-        super().__init__()
+        super().__init__(timeout=1800)
 
         self.children[1].disabled = self.index >= len(self.pages) - 1
         self.children[0].disabled = self.index <= 0
 
+        if not search:
+            self.remove_item(self.children[2])
         
     
     @discord.ui.button(style=discord.ButtonStyle.primary, emoji="◀️", disabled=True)
@@ -41,6 +66,18 @@ class PaginatorView(discord.ui.View):
 
         embed.set_footer(text=embed.footer.text.replace(f"Page {self.index+2}", f"Page {self.index+1}"))
 
+        if len(self.page_image_generators)-1 >= self.index and self.page_image_generators[self.index] and self.page_image_generators[self.index] != self.page_image_generators[self.index+1]:
+            generator = self.page_image_generators[self.index]
+            
+            if type(generator) == str:
+                embed.set_image(url=generator)
+            else:
+                image = generator[0](*generator[1])
+                graph = discord.File(image, filename="paginator_image.png")
+                embed.set_image(url="attachment://paginator_image.png")
+
+                return await interaction.response.edit_message(embed=embed, view=self, attachments=[graph])
+            
         await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.primary, emoji="▶️")
@@ -57,6 +94,18 @@ class PaginatorView(discord.ui.View):
         self.children[0].disabled = self.index <= 0
 
         embed.set_footer(text=embed.footer.text.replace(f"Page {self.index}", f"Page {self.index+1}"))
+
+        if len(self.page_image_generators)-1 >= self.index and self.page_image_generators[self.index] and self.page_image_generators[self.index] != self.page_image_generators[self.index-1]:
+            generator = self.page_image_generators[self.index]
+
+            if type(generator) == str:
+                embed.set_image(url=generator)
+            else:
+                image = generator[0](*generator[1])
+                graph = discord.File(image, filename="paginator_image.png")
+                embed.set_image(url="attachment://paginator_image.png")
+
+                return await interaction.response.edit_message(embed=embed, view=self, attachments=[graph])
             
         await interaction.response.edit_message(embed=embed, view=self)
     

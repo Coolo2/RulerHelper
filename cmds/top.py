@@ -34,7 +34,7 @@ class Top(commands.Cog):
 
         tracking = self.client.get_tracking()
 
-        tracking.towns = list(sorted(tracking.towns, key=lambda x:x.get_total_activity(), reverse=True))
+        tracking.towns = list(sorted(tracking.towns, key=lambda x:x.total_activity, reverse=True))
 
         description_string = ""
         plottable = {}
@@ -42,13 +42,15 @@ class Top(commands.Cog):
             if not town.town:
                 continue
             
-            plottable[town.town.name_formatted] = town.get_total_activity() / 60
-            description_string += f"{i+1}. {town.town.name_formatted}: `{functions.generate_time(town.get_total_activity())}` ({(town.get_total_activity()/tracking.total_tracked_seconds)*100:,.1f}%)\n"
+            plottable[town.town.name_formatted] = town.total_activity / 60
+            description_string += f"{i+1}. {town.town.name_formatted}: `{functions.generate_time(town.total_activity)}` ({(town.total_activity/tracking.total_tracked_seconds)*100:,.1f}%)\n"
 
         plottable = dict(graphs.take(25, plottable.items()))
 
-        if highlight:
+        if highlight and highlight in list(plottable.keys()):
             highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
 
         file_name = graphs.save_graph(
             plottable, 
@@ -71,11 +73,59 @@ class Top(commands.Cog):
     @_towns_activity.autocomplete("highlight")
     async def _towns_activity_autocomplete(self, interaction : discord.Interaction, current : str):
         tracking = self.client.get_tracking()
-        tracking.towns = list(sorted(tracking.towns, key=lambda x:x.get_total_activity(), reverse=True))
+        tracking.towns = list(sorted(tracking.towns, key=lambda x:x.total_activity, reverse=True))
 
         return [
             app_commands.Choice(name=t.town.name_formatted, value=t.town.name_formatted)
-            for t in tracking.towns[:25] if current.lower().replace("_", " ") in t.town.name_formatted.lower()
+            for t in tracking.towns[:25] if t.town and current.lower().replace("_", " ") in t.town.name_formatted.lower()
+        ][:25]
+    
+    @top_towns.command(name="age", description="Towns listed by age (total age)")
+    async def _towns_age(self, interaction : discord.Interaction, reverse : bool = None, highlight : str = None):
+
+        #print_here
+
+        world = self.client.cached_worlds["RulerEarth"]
+        world.towns = list(sorted(world.towns, key=lambda x:x.age, reverse=True if not reverse else False))
+
+        description_string = ""
+        plottable = {}
+        for i, town in enumerate(world.towns):
+            plottable[town.name_formatted] = town.age
+            description_string += f"{i+1}. {town.name_formatted}: `{town.age} days` ({town.founded.strftime('%b %d %Y')})\n"
+
+        plottable = dict(graphs.take(35, plottable.items()))
+        
+        if highlight and highlight in list(plottable.keys()):
+            highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
+
+        file_name = graphs.save_graph(
+            plottable, 
+            "Top towns (by age)", 
+            "Town Name", 
+            "Age (days)", 
+            plt.bar,
+            highlight=highlight
+        )
+        graph = discord.File(file_name, filename="towns_graph.png")
+    
+        embed = discord.Embed(title=f"Towns ({len(world.towns)})", color=s.embed)
+        embed.set_image(url="attachment://towns_graph.png")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+    
+    @_towns_age.autocomplete("highlight")
+    async def _towns_age_highlight(self, interaction : discord.Interaction, current : str):
+        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world.towns = list(sorted(world.towns, key=lambda x:x.age, reverse=True))
+
+        return [
+            app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
+            for t in world.towns[:25] if current.lower().replace("_", " ") in t.name_formatted.lower()
         ][:25]
     
     @top_towns.command(name="residents", description="Towns ordered by total residents")
@@ -96,8 +146,10 @@ class Top(commands.Cog):
 
         plottable = dict(graphs.take(25, plottable.items()))
 
-        if highlight:
+        if highlight and highlight in list(plottable.keys()):
             highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
 
         file_name = graphs.save_graph(
             plottable, 
@@ -144,8 +196,10 @@ class Top(commands.Cog):
 
         plottable = dict(graphs.take(25, plottable.items()))
 
-        if highlight:
+        if highlight and highlight in list(plottable.keys()):
             highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
 
         file_name = graphs.save_graph(
             plottable, 
@@ -192,8 +246,10 @@ class Top(commands.Cog):
 
         plottable = dict(graphs.take(25, plottable.items()))
 
-        if highlight:
+        if highlight and highlight in list(plottable.keys()):
             highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
 
         file_name = graphs.save_graph(
             plottable, 
@@ -211,6 +267,56 @@ class Top(commands.Cog):
         view = paginator.PaginatorView(embed, description_string)
 
         await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+    
+    @top_towns.command(name="balance", description="Towns ordered by bank balance")
+    async def _towns_balance(self, interaction : discord.Interaction, highlight : str = None):
+
+        #print_here
+
+        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world.towns = list(sorted(world.towns, key=lambda x:x.bank, reverse=True))
+
+        total_balance = world.total_town_bank
+
+        description_string = ""
+        plottable = {}
+        for i, town in enumerate(world.towns):
+            plottable[town.name_formatted] = town.bank
+            description_string += f"{i+1}. {town.name_formatted}: `${town.bank:,.2f}` ({(town.bank/total_balance)*100:.1f}%)\n"
+
+        plottable = dict(graphs.take(25, plottable.items()))
+
+        if highlight and highlight in list(plottable.keys()):
+            highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
+
+        file_name = graphs.save_graph(
+            plottable, 
+            "Top towns (by bank balance)", 
+            "Town Name", 
+            "Bank Balance", 
+            plt.bar,
+            highlight=highlight
+        )
+        graph = discord.File(file_name, filename="towns_graph.png")
+    
+        embed = discord.Embed(title=f"Towns ({len(world.towns)})", color=s.embed)
+        embed.set_image(url="attachment://towns_graph.png")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+    
+
+    @_towns_residents.autocomplete("highlight")
+    async def towns_balance(self, interaction : discord.Interaction, current : str):
+        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+
+        return [
+            app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
+            for t in list(sorted(world.towns, key=lambda x:x.bank, reverse=True))[:25] if current.lower().replace("_", " ") in t.name_formatted.lower()
+        ][:25]
     
 
     @_nations_residents.autocomplete("highlight")
@@ -247,8 +353,10 @@ class Top(commands.Cog):
             plottable[player.name] = player.total_online_seconds / 60
         plottable = dict(graphs.take(25, plottable.items()))
 
-        if highlight:
+        if highlight and highlight in list(plottable.keys()):
             highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
 
         file_name = graphs.save_graph(
             plottable, 
@@ -295,8 +403,10 @@ class Top(commands.Cog):
 
         plottable = dict(graphs.take(25, plottable.items()))
 
-        if highlight:
+        if highlight and highlight in list(plottable.keys()):
             highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
 
         file_name = graphs.save_graph(
             plottable, 
@@ -323,6 +433,109 @@ class Top(commands.Cog):
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
             for t in list(sorted(world.nations, key=lambda x:x.area_km, reverse=True))[:25] if current.lower().replace("_", " ") in t.name_formatted.lower()
+        ][:25]
+    
+    @top_nations.command(name="towns", description="Nations ordered by total town count")
+    async def _nations_towns(self, interaction : discord.Interaction, highlight : str = None):
+
+        #print_here
+
+        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world.nations = list(sorted(world.nations, key=lambda x:len(x.towns), reverse=True))
+
+        description_string = ""
+        plottable = {}
+        for i, nation in enumerate(world.nations):
+            nation_area = nation.area_km
+            plottable[nation.name_formatted] = len(nation.towns)
+            description_string += f"{i+1}. {nation.name_formatted}: `{len(nation.towns)} towns` ({(len(nation.towns)/len(world.towns))*100:,.2f}%)\n"
+
+        plottable = dict(graphs.take(25, plottable.items()))
+
+        if highlight and highlight in list(plottable.keys()):
+            highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
+
+        file_name = graphs.save_graph(
+            plottable, 
+            "Top nations (by total towns)", 
+            "Nation Name", 
+            "Town Total", 
+            plt.bar,
+            highlight=highlight
+        )
+        graph = discord.File(file_name, filename="nations_graph.png")
+    
+        embed = discord.Embed(title=f"Nations ({len(world.nations)})", color=s.embed)
+        embed.set_image(url="attachment://nations_graph.png")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+    
+
+    @_nations_towns.autocomplete("highlight")
+    async def nations_towns_highlight_nation(self, interaction : discord.Interaction, current : str):
+        world = self.client.cached_worlds["RulerEarth"]
+
+        return [
+            app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
+            for t in list(sorted(world.nations, key=lambda x:x.area_km, reverse=True))[:25] if current.lower().replace("_", " ") in t.name_formatted.lower()
+        ][:25]
+    
+    @top_players.command(name="visited_towns", description="Rank players by number of visited towns")
+    async def _players_visited_towns(self, interaction : discord.Interaction, highlight : str = None):
+
+        #print_here
+
+        await interaction.response.defer()
+
+        tracking = self.client.get_tracking()
+
+        tracking.players = list(sorted(tracking.players, key = lambda x: len(x.visited), reverse=True))
+
+        description_string = ""
+        for i, player in enumerate(tracking.players):
+
+            percent = (len(player.visited) / len(tracking.towns)) * 100
+            description_string += f"{i+1}. {player.name}: `{len(player.visited)}` ({percent:,.1f}%)\n"
+
+        plottable = {}
+        for player in tracking.players:
+            plottable[player.name] = len(player.visited)
+        plottable = dict(graphs.take(25, plottable.items()))
+
+        if highlight and highlight in list(plottable.keys()):
+            highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
+
+        file_name = graphs.save_graph(
+            plottable, 
+            "Top players (by visited town count)", 
+            "Player", 
+            "Town count", 
+            plt.bar,
+            highlight=highlight
+        )
+        graph = discord.File(file_name, filename="players_graph.png")
+    
+        embed = discord.Embed(title=f"Players ({len(tracking.players)})", color=s.embed)
+        embed.set_image(url="attachment://players_graph.png")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
+    
+    @_players_activity.autocomplete("highlight")
+    async def _top_players_highlight(self, interaction : discord.Interaction, current : str):
+        tracking = self.client.get_tracking()
+        tracking.players = list(sorted(tracking.players, key = lambda x: x.total_online_seconds, reverse=True))
+
+        return [
+            app_commands.Choice(name=t.name, value=t.name)
+            for t in tracking.players[:25] if current.lower() in t.name.lower()
         ][:25]
 
 

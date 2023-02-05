@@ -50,9 +50,16 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
                             if channel_id_str not in territory_enter_sent or player.name not in territory_enter_sent[channel_id_str]:
 
                                 tracking_player = client.get_tracking().get_player(player.name)
-                                likely_residency = tracking_player.get_likely_residency()
+                                likely_residency_nation = None
+                                if tracking_player:
+                                    _lr = tracking_player.get_likely_residency()
 
-                                if "ignore_if_resident" in channel_settings and likely_residency.town.nation.name == town.nation.name:
+                                    likely_residency = _lr.town.name_formatted
+                                    likely_residency_nation = _lr.town.nation.name_formatted
+                                else:
+                                    likely_residency = "Unknown"
+
+                                if "ignore_if_resident" in channel_settings and likely_residency_nation == town.nation.name_formatted:
                                     continue
 
                                 if channel_id_str not in territory_enter_sent:
@@ -64,7 +71,7 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
                                 embed.add_field(name="Player name", value=player.name)
                                 embed.add_field(name="Coordinates", value=f"[{player.x:,d}, {player.y:,d}, {player.z:,d}]({client.url}?x={player.x}&z={player.z}&zoom=10)")
                                 embed.add_field(name="Town", value=player.current_town.name_formatted)
-                                embed.add_field(name="Likely residency", value=f"{likely_residency.town.name_formatted} ({likely_residency.town.nation.name_formatted if likely_residency.town.nation else 'Unknown'})" if likely_residency and likely_residency.town else "Unknown")
+                                embed.add_field(name="Likely residency", value=f"{likely_residency} ({likely_residency_nation if likely_residency_nation else 'Unknown'})" if likely_residency and likely_residency else "Unknown")
                                 embed.set_thumbnail(url=player.avatar)
 
                                 await channel.send(embed=embed)
@@ -80,38 +87,33 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
                     for player in players_to_remove:
                         del territory_enter_sent[channel_id_str][player]
 
-                            
-
-
-                    
-
-
-            
-
-
 def get_world_task(bot : commands.Bot, client_a : client.Client):
 
     async def task(bot : commands.Bot, client : client.Client):
         global prev_players
         global nearby_players
-
         with open("rulercraft/server_data.pickle", "rb") as f:
             try:
                 server = pickle.load(f)
             except EOFError:
                 server = {}
+        
+        print("1: " + str(datetime.datetime.now()))
 
         if "total_tracked" not in server:
             server["total_tracked"] = 90000
         
         server["total_tracked"] += 20
+        server["last"] = datetime.datetime.now().timestamp()
         
         world : dynmap_w.World = await client.get_world("RulerEarth")
+        
 
         # Get total residents and check territory
         in_territory_this_iteration = []
             
         for town in world.towns:
+            
             if not town.bank:
                 continue
             if "towns" not in server:
@@ -160,6 +162,28 @@ def get_world_task(bot : commands.Bot, client_a : client.Client):
                 server["players"][player.name]["activity"]["last"] = datetime.datetime.now().timestamp()
 
                 server["players"][player.name]["coordinates"] = {"x":player.x, "y":player.y, "z":player.z, "town":nearby_town}
+        
+        # Remove inactive players and towns and old history data
+        remove_players = []
+        for name, pl in server["players"].items():
+            last = datetime.datetime.fromtimestamp(pl["activity"]["last"])
+            if datetime.datetime.now() - last > datetime.timedelta(days=45):
+                remove_players.append(name)
+        for player_name in remove_players:
+            del server["players"][player_name]
+        
+        #remove_towns = []
+        #towns = [t.name for t in world.towns]
+        #for town_name in server["towns"].keys():
+        #    if town_name not in towns:
+        #        remove_towns.append(town_name)
+        #for town_name in remove_towns:
+        #    del server["towns"][town_name]
+
+        for name, town in server["towns"].items():
+            if len(town["bank_history"]) > 45: 
+                del town["bank_history"][list(town["bank_history"])[0]]
+                del town["total_residents_history"][list(town["total_residents_history"])[0]]
 
 
         prev_players = world.players
@@ -172,10 +196,20 @@ def get_world_task(bot : commands.Bot, client_a : client.Client):
         with open(f"rulercraft/server_data_backup_{td.day}_{td.month}_{td.year}.pickle", "wb") as f:
             pickle.dump(server, f)
         
+        print("2: " + str(datetime.datetime.now()))
+        try:
         
+            try:
+                await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"{len(world.players)} online players | /info help"))
+            except:
+                pass
+            
+            await notifications(bot, client)
+        except Exception as e:
+            print(e)
+
+        print("3: " + str(datetime.datetime.now()))
         
-        await notifications(bot, client)
-        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"{len(world.players)} online players | /info help"))
         
     
 
