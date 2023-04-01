@@ -34,6 +34,7 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
     world = client.cached_worlds["RulerEarth"]
 
     if "notifications" in config:
+        print("h")
         for channel_id_str, channel_settings in config["notifications"].items():
             channel = bot.get_channel(int(channel_id_str))
             nation = world.get_nation(channel_settings["nation"])
@@ -54,12 +55,15 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
                                 if tracking_player:
                                     _lr = tracking_player.get_likely_residency()
 
-                                    likely_residency = _lr.town.name_formatted
-                                    likely_residency_nation = _lr.town.nation.name_formatted
+                                    if _lr.town:
+                                        likely_residency = _lr.town.name_formatted
+                                        likely_residency_nation = _lr.town.nation.name_formatted if _lr.town.nation else ""
+                                    else:
+                                        likely_residency = "Unknown"
                                 else:
                                     likely_residency = "Unknown"
 
-                                if "ignore_if_resident" in channel_settings and likely_residency_nation == town.nation.name_formatted:
+                                if "ignore_if_resident" in channel_settings and town.nation and likely_residency_nation == town.nation.name_formatted:
                                     continue
 
                                 if channel_id_str not in territory_enter_sent:
@@ -87,11 +91,17 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
                     for player in players_to_remove:
                         del territory_enter_sent[channel_id_str][player]
 
+counter = 0
+potential_remove_towns : typing.Dict[str, int] = {}
+
 def get_world_task(bot : commands.Bot, client_a : client.Client):
 
     async def task(bot : commands.Bot, client : client.Client):
         global prev_players
         global nearby_players
+        global counter 
+        global potential_remove_towns
+
         with open("rulercraft/server_data.pickle", "rb") as f:
             try:
                 server = pickle.load(f)
@@ -172,15 +182,38 @@ def get_world_task(bot : commands.Bot, client_a : client.Client):
         for player_name in remove_players:
             del server["players"][player_name]
         
-        #remove_towns = []
-        #towns = [t.name for t in world.towns]
-        #for town_name in server["towns"].keys():
-        #    if town_name not in towns:
-        #        remove_towns.append(town_name)
-        #for town_name in remove_towns:
-        #    del server["towns"][town_name]
+        if counter % 10 == 0:
+            # Run every 10 iterations
+            towns = [t.name for t in world.towns]
+            for town_name in server["towns"].keys():
+                if town_name not in towns:
+                    if town_name not in potential_remove_towns or not potential_remove_towns[town_name]:
+                        potential_remove_towns[town_name] = 0
+                    
+                    potential_remove_towns[town_name] += 1
+            
+            for town_name in potential_remove_towns:
+                if town_name in towns:
+                    potential_remove_towns[town_name] = 0
+
+            for town_name, number in potential_remove_towns.items():
+                if number and number >= 3 :
+                    
+                    del server["towns"][town_name]
+                    potential_remove_towns[town_name] = None
+
+                    await bot.get_channel(985596858992853122).send(f"removed town {town_name}")
 
         for name, town in server["towns"].items():
+            town_remove_players : typing.List[str] = []
+
+            for player_name, player_data in town["visited"].items():
+                if player_name not in server["players"]:
+                    town_remove_players.append(player_name)
+            
+            for player_name in town_remove_players:
+                del town["visited"][player_name]
+
             if len(town["bank_history"]) > 45: 
                 del town["bank_history"][list(town["bank_history"])[0]]
                 del town["total_residents_history"][list(town["total_residents_history"])[0]]
@@ -207,8 +240,12 @@ def get_world_task(bot : commands.Bot, client_a : client.Client):
             await notifications(bot, client)
         except Exception as e:
             print(e)
+        
+        counter += 1
 
         print("3: " + str(datetime.datetime.now()))
+
+        
         
         
     

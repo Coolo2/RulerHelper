@@ -10,6 +10,8 @@ import pickle
 
 import discord
 import datetime
+from funcs import functions
+import shapely.geometry
 
 class TrackTown():
 
@@ -59,6 +61,46 @@ class TrackTown():
         
         return greatest
     
+    def get_notable_statistics(self, top_under_percentage : int = 10) -> typing.List[str]:
+        stats = []
+
+        if len(self.town.points) > 1:
+            detatched_area_km = 0
+            for point_group in self.town.points:
+                poly = shapely.geometry.Polygon(point_group)
+                if not poly.contains(shapely.geometry.Point(self.town.x, self.town.z)):
+                    detatched_area_km += poly.area / (1000^2)
+            detatched_area_percentage = (detatched_area_km / self.town.area_km) * 100
+
+            stats.append(f"Detatched territories make up {detatched_area_percentage:,.0f}% of {self.town.name_formatted}'s claims")
+
+        rank_stats : typing.List[typing.List[int, str]] = []
+
+        towns_residents = list(sorted(self.world.towns, key=lambda x:x.total_residents, reverse=True))
+        if (towns_residents.index(self.town) / len(towns_residents)) * 100 < top_under_percentage:
+            rank_stats.append([towns_residents.index(self.town), f"{self.town.name_formatted} is the {functions.ordinal(towns_residents.index(self.town)+1)} most populous town"])
+        
+        towns_balance = list(sorted(self.world.towns, key=lambda x:x.bank, reverse=True))
+        if (towns_balance.index(self.town) / len(towns_balance)) * 100 < top_under_percentage:
+            rank_stats.append([towns_balance.index(self.town), f"{self.town.name_formatted} is the {functions.ordinal(towns_balance.index(self.town)+1)} richest town"])
+        
+        towns_activity = list(sorted(self.tracking.towns, key=lambda x:x.total_activity, reverse=True))
+        if (towns_activity.index(self.town) / len(towns_activity)) * 100 < top_under_percentage:
+            rank_stats.append([towns_activity.index(self.town), f"{self.town.name_formatted} is the {functions.ordinal(towns_activity.index(self.town)+1)} most active town"])
+        
+        towns_area = list(sorted(self.world.towns, key=lambda x:x.area_km, reverse=True))
+        if (towns_area.index(self.town) / len(towns_area)) * 100 < top_under_percentage:
+            rank_stats.append([towns_area.index(self.town), f"{self.town.name_formatted} is the {functions.ordinal(towns_area.index(self.town)+1)} biggest town"])
+
+        towns_age = list(sorted(self.world.towns, key=lambda x:x.age, reverse=True))
+        if (towns_age.index(self.town) / len(towns_age)) * 100 < top_under_percentage:
+            rank_stats.append([towns_age.index(self.town), f"{self.town.name_formatted} is the {functions.ordinal(towns_age.index(self.town)+1)} oldest town"])
+        
+        rank_stats = [i[1] for i in sorted(rank_stats, key=lambda x: x[0])]
+        stats += rank_stats
+
+        return stats
+    
     
 
 class TrackPlayer():
@@ -87,7 +129,7 @@ class TrackPlayer():
             if town.town and town.town.ruler == self.name:
                 return town 
         
-        return self.tracking.get_town(self.likely_residency_set) or (self.tracking.get_town(visited[0]) if len(visited) > 0 else None)
+        return self.tracking.get_town(self.likely_residency_set) or (self.tracking.get_town(list(visited)[0]) if len(visited) > 0 else None)
 
     @property 
     def town(self) -> tracking.TrackTown:
@@ -125,6 +167,24 @@ class TrackPlayer():
                     return member.id 
         
         return self.discord_id_set
+    
+    def get_notable_statistics(self, top_under_percentage : int = 10) -> typing.List[str]:
+        stats = []
+
+        rank_stats : typing.List[typing.List[int, str]] = []
+
+        players_activity = list(sorted(self.tracking.players, key=lambda x:x.total_online_seconds, reverse=True))
+        if (players_activity.index(self) / len(players_activity)) * 100 < top_under_percentage:
+            rank_stats.append([players_activity.index(self), f"{self.name} is the {functions.ordinal(players_activity.index(self)+1)} most active player"])
+        
+        players_visited = list(sorted(self.tracking.players, key=lambda x:len(x.visited), reverse=True))
+        if (players_visited.index(self) / len(players_visited)) * 100 < top_under_percentage:
+            rank_stats.append([players_visited.index(self), f"{self.name} is {functions.ordinal(players_visited.index(self)+1)} on the visited towns leaderboard"])
+        
+        rank_stats = [i[1] for i in sorted(rank_stats, key=lambda x: x[0])]
+        stats += rank_stats
+
+        return stats
     
 
 class Tracking():

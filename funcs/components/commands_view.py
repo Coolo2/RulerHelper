@@ -6,14 +6,17 @@ from discord import app_commands
 import typing
 
 class Command():
-    def __init__(self, command : str, label : str, parameters : tuple, button_style : discord.ButtonStyle = discord.ButtonStyle.secondary, row=1):
+    def __init__(self, command : typing.Union[str, typing.Coroutine], label : str, parameters : tuple, button_style : discord.ButtonStyle = discord.ButtonStyle.secondary, row=1):
         self.command = command 
         self.label = label 
         self.parameters = parameters 
         self.button_style = button_style
         self.row = row
     
-    def get_command_class(self, tree : app_commands.CommandTree) -> app_commands.Command:
+    def get_command_callback(self, tree : app_commands.CommandTree) -> typing.Coroutine:
+        if type(self.command) != str:
+            return self.command 
+        
         command = None 
         
         for item in self.command.split(" "):
@@ -21,11 +24,11 @@ class Command():
                 command = tree.get_command(item)
             else:
                 command = command.get_command(item)
-        return command
+        return command.callback
     
     
     async def execute(self, cog, interaction : discord.Interaction):
-        await (self.get_command_class(interaction.client.tree)).callback(cog, interaction, *self.parameters)
+        await (self.get_command_callback(interaction.client.tree))(cog, interaction, *self.parameters)
 
 class CommandsView(discord.ui.View):
 

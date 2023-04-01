@@ -19,6 +19,9 @@ dict = {
         ],
         "world":[
             "Get an image of the town distribution on Earth and stats about the world"
+        ],
+        "raw":[
+            "Get raw data files for the bot"
         ]
     },
     "history":{
@@ -35,6 +38,12 @@ dict = {
                 "A graph of the total resident count of a town over time.",
                 "[town]"
             ]
+        },
+        "player":{
+            "visited_towns":[
+                "Get a list of the player's visited towns",
+                "[player]"
+            ]
         }
     },
     "top":{
@@ -50,11 +59,27 @@ dict = {
             "area":[
                 "Rank top towns by the total claimed area",
                 "*[highlight_town]"
+            ],
+            "balance":[
+                "Rank towns by the total bank balance",
+                "*[highlight_town]"
+            ],
+            "age":[
+                "Rank towns by age in days",
+                "*[highlight_town]"
             ]
         },
         "nations":{
             "residents":[
                 "Rank top nations by total resident count",
+                "*[highlight_nation]"
+            ],
+            "area":[
+                "Rank top nations by total claimed area",
+                "*[highlight_nation]"
+            ],
+            "towns":[
+                "Rank top nations by total town count",
                 "*[highlight_nation]"
             ],
         },
@@ -63,7 +88,25 @@ dict = {
                 "Rank top players by total online time on Earth since tracking started",
                 "*[highlight_player]"
             ],
+            "visited_towns":[
+                "Rank top players by total visited town count",
+                "*[highlight_player]"
+            ],
         }
+    },
+    "compare":{
+        "towns":[
+            "Compare two towns' statistics",
+            "[first_town] [second_town]"
+        ],
+        "nations":[
+            "Compare two nationss' statistics",
+            "[first_nation] [second_nation]"
+        ],
+        "players":[
+            "Compare two players' statistics",
+            "[first_player] [second_player]"
+        ]
     },
     "notifications":{
         "enable":[

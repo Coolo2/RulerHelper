@@ -26,6 +26,8 @@ class Top(commands.Cog):
     top_towns = app_commands.Group(name='towns', parent = top, description='Top towns filter')
     top_nations = app_commands.Group(name='nations', parent = top, description='Top nations filter')
     top_players = app_commands.Group(name='players', parent = top, description='Top players filter')
+    top_cultures = app_commands.Group(name="cultures", parent=top, description="Top cultures filter")
+    top_religions = app_commands.Group(name="religions", parent=top, description="Top religions filter")
 
     @top_towns.command(name="activity", description="Towns listed by activity (total time online)")
     async def _towns_activity(self, interaction : discord.Interaction, highlight : str = None):
@@ -536,6 +538,199 @@ class Top(commands.Cog):
         return [
             app_commands.Choice(name=t.name, value=t.name)
             for t in tracking.players[:25] if current.lower() in t.name.lower()
+        ][:25]
+    
+    # Cultures
+
+    @top_cultures.command(name="residents", description="Cultures ordered by total residents of towns ")
+    async def _cultures_residents(self, interaction : discord.Interaction, highlight : str = None):
+
+        #print_here
+
+        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world.cultures = list(sorted(world.cultures, key=lambda x:x.total_residents, reverse=True))
+
+        description_string = ""
+        plottable = {}
+        for i, culture in enumerate(world.cultures):
+            plottable[culture.name] = culture.total_residents
+            description_string += f"{i+1}. {culture.name}: `{culture.total_residents}` ({(culture.total_residents/world.total_residents)*100:,.2f}%)\n"
+
+        plottable = dict(graphs.take(25, plottable.items()))
+
+        if highlight and highlight in list(plottable.keys()):
+            highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
+
+        file_name = graphs.save_graph(
+            plottable, 
+            "Top cultures (by total residents)", 
+            "Culture Name", 
+            "Residents", 
+            plt.bar,
+            highlight=highlight
+        )
+        graph = discord.File(file_name, filename="cultures_graph.png")
+    
+        embed = discord.Embed(title=f"Cultures ({len(world.cultures)})", color=s.embed)
+        embed.set_image(url="attachment://cultures_graph.png")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+
+    @_cultures_residents.autocomplete("highlight")
+    async def cultures_residents_autocomplete_culture(self, interaction : discord.Interaction, current : str):
+        world = self.client.cached_worlds["RulerEarth"]
+
+        return [
+            app_commands.Choice(name=c.name, value=c.name)
+            for c in list(sorted(world.cultures, key=lambda x: x.total_residents, reverse=True))[:25] if current.lower() in c.name.lower()
+        ][:25]
+    
+    @top_cultures.command(name="towns", description="Cultures ordered by total town count ")
+    async def _cultures_towns(self, interaction : discord.Interaction, highlight : str = None):
+
+        #print_here
+
+        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world.cultures = list(sorted(world.cultures, key=lambda x:len(x.towns), reverse=True))
+
+        description_string = ""
+        plottable = {}
+        for i, culture in enumerate(world.cultures):
+            plottable[culture.name] = len(culture.towns)
+            description_string += f"{i+1}. {culture.name}: `{len(culture.towns)}` ({(len(culture.towns)/len(world.towns))*100:,.2f}%)\n"
+
+        plottable = dict(graphs.take(25, plottable.items()))
+
+        if highlight and highlight in list(plottable.keys()):
+            highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
+
+        file_name = graphs.save_graph(
+            plottable, 
+            "Top cultures (by town count)", 
+            "Culture Name", 
+            "Towns", 
+            plt.bar,
+            highlight=highlight
+        )
+        graph = discord.File(file_name, filename="cultures_graph.png")
+    
+        embed = discord.Embed(title=f"Cultures ({len(world.cultures)})", color=s.embed)
+        embed.set_image(url="attachment://cultures_graph.png")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+
+    @_cultures_towns.autocomplete("highlight")
+    async def cultures_towns_autocomplete_culture(self, interaction : discord.Interaction, current : str):
+        world = self.client.cached_worlds["RulerEarth"]
+
+        return [
+            app_commands.Choice(name=c.name, value=c.name)
+            for c in list(sorted(world.cultures, key=lambda x: len(x.towns), reverse=True))[:25] if current.lower() in c.name.lower()
+        ][:25]
+    
+    # Religions
+
+    @top_religions.command(name="followers", description="Religions ordered by total follower count ")
+    async def _religions_residents(self, interaction : discord.Interaction, highlight : str = None):
+
+        #print_here
+
+        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world.religions = list(sorted(world.religions, key=lambda x:x.total_followers, reverse=True))
+
+        description_string = ""
+        plottable = {}
+        for i, religion in enumerate(world.religions):
+            plottable[religion.name] = religion.total_followers
+            description_string += f"{i+1}. {religion.name}: `{religion.total_followers}` ({(religion.total_followers/world.total_residents)*100:,.2f}%)\n"
+
+        plottable = dict(graphs.take(25, plottable.items()))
+
+        if highlight and highlight in list(plottable.keys()):
+            highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
+
+        file_name = graphs.save_graph(
+            plottable, 
+            "Top religions (by total followers)", 
+            "Religion Name", 
+            "Followers", 
+            plt.bar,
+            highlight=highlight
+        )
+        
+        graph = discord.File(file_name, filename="religions_graph.png")
+    
+        embed = discord.Embed(title=f"Religions ({len(world.religions)})", color=s.embed)
+        embed.set_image(url="attachment://religions_graph.png")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+
+    @_religions_residents.autocomplete("highlight")
+    async def religions_residents_autocomplete_religion(self, interaction : discord.Interaction, current : str):
+        world = self.client.cached_worlds["RulerEarth"]
+
+        return [
+            app_commands.Choice(name=r.name, value=r.name)
+            for r in list(sorted(world.religions, key=lambda x: x.total_followers, reverse=True))[:25] if current.lower() in r.name.lower()
+        ][:25]
+    
+    @top_religions.command(name="towns", description="Religions ordered by total town count ")
+    async def _religions_towns(self, interaction : discord.Interaction, highlight : str = None):
+
+        #print_here
+
+        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world.religions = list(sorted(world.religions, key=lambda x:len(x.towns), reverse=True))
+
+        description_string = ""
+        plottable = {}
+        for i, religion in enumerate(world.religions):
+            plottable[religion.name] = len(religion.towns)
+            description_string += f"{i+1}. {religion.name}: `{len(religion.towns)}` ({(len(religion.towns)/len(world.towns))*100:,.2f}%)\n"
+
+        plottable = dict(graphs.take(25, plottable.items()))
+
+        if highlight and highlight in list(plottable.keys()):
+            highlight = list(plottable.keys()).index(highlight)
+        else:
+            highlight = None
+
+        file_name = graphs.save_graph(
+            plottable, 
+            "Top religions (by town count)", 
+            "Religion Name", 
+            "Towns", 
+            plt.bar,
+            highlight=highlight
+        )
+        graph = discord.File(file_name, filename="religions_graph.png")
+    
+        embed = discord.Embed(title=f"Religions ({len(world.religions)})", color=s.embed)
+        embed.set_image(url="attachment://religions_graph.png")
+
+        view = paginator.PaginatorView(embed, description_string)
+
+        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+
+    @_religions_towns.autocomplete("highlight")
+    async def religions_towns_highlight(self, interaction : discord.Interaction, current : str):
+        world = self.client.cached_worlds["RulerEarth"]
+
+        return [
+            app_commands.Choice(name=r.name, value=r.name)
+            for r in list(sorted(world.religions, key=lambda x: len(x.towns), reverse=True))[:25] if current.lower() in r.name.lower()
         ][:25]
 
 

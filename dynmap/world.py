@@ -11,7 +11,9 @@ import datetime
 from bs4 import BeautifulSoup
 import math
 
+import numpy as np
 import shapely.geometry
+from funcs import functions
 
 def calculateDistance(coordinate1, coordinate2):
     dist = math.sqrt((coordinate1[1] - coordinate1[0])**2 + (coordinate2[1] - coordinate2[0])**2)
@@ -56,7 +58,47 @@ class Player:
         return {
             "name":self.name, "health":self.health, "armor":self.armor, "coordinates":[self.x, self.y, self.z], "avatar":self.avatar
         }
+
+
+
+class _CultureOrReligion:
+    # Progressive generation
+    def __init__(self, CRType : str, world : dynmap_w.World, name : str):
+        self.name = name 
+        self.world = world 
+        self.type = CRType
     
+    @property 
+    def towns(self) -> typing.List[dynmap_w.Town]:
+        _towns = []
+        for town in self.world.towns:
+            if town.culture == self or town.religion == self:
+                _towns.append(town)
+        return _towns
+    
+    @property 
+    def total_residents(self) -> int:
+        c = 0
+        for town in self.towns:
+            c += town.total_residents 
+        return c
+    
+    def __eq__(self, other):
+        if other and other.name == self.name:
+            return True 
+        return False
+
+class Culture(_CultureOrReligion):
+    def __init__(self, world : dynmap_w.World, name : str):
+        super().__init__("culture", world, name)
+
+class Religion(_CultureOrReligion):
+    def __init__(self, world : dynmap_w.World, name : str):
+        super().__init__("religion", world, name)
+    @property 
+    def total_followers(self):
+        return self.total_residents
+
 
 class Nation:
     def __init__(self, world : dynmap_w.World, name : str):
@@ -113,6 +155,38 @@ class Nation:
             
         return total_bank
     
+    @property 
+    def religion_make_up(self) -> typing.Dict[str, int]:
+        d = {}
+        for town in self.towns:
+            if town.religion:
+                if town.religion.name not in d:
+                    d[town.religion.name] = 0
+                d[town.religion.name] += town.total_residents
+        d = dict(sorted(d.items(), key=lambda x: x[1], reverse=True))
+        return d
+    
+    @property 
+    def culture_make_up(self) -> typing.Dict[str, int]:
+        d = {}
+        for town in self.towns:
+            if town.culture:
+                if town.culture.name not in d:
+                    d[town.culture.name] = 0
+                d[town.culture.name] += town.total_residents
+        d = dict(sorted(d.items(), key=lambda x: x[1], reverse=True))
+        return d
+    
+    @property 
+    def borders(self) -> typing.List[dynmap_w.Nation]:
+        borders = []
+        for t in self.towns:
+            for town in t.borders:
+                if town.nation and town.nation not in borders and town.nation != self:
+                    borders.append(town.nation)
+        
+        return borders
+
     def __eq__(self, other):
         if other and other.name == self.name:
             return True 
@@ -120,6 +194,30 @@ class Nation:
     
     def to_dict(self):
         return {"name":self.name, "total_residents":self.total_residents, "towns":[t.name for t in self.towns], "plots":round((self.area_km*(1000^2))/256), "capital":self.capital.name}
+
+    def get_notable_statistics(self, top_under_percentage : int = 10) -> typing.List[str]:
+        stats = []
+        
+        stats.append(f"{self.name_formatted}'s average town bank balance is ${self.total_bank/len(self.towns):,.2f}")
+
+        rank_stats : typing.List[typing.List[int, str]] = []
+
+        nations_residents = list(sorted(self.world.nations, key=lambda x:x.total_residents, reverse=True))
+        if (nations_residents.index(self) / len(nations_residents)) * 100 < top_under_percentage:
+            rank_stats.append([nations_residents.index(self), f"{self.name_formatted} is the {functions.ordinal(nations_residents.index(self)+1)} most populous nation"])
+        
+        nations_area = list(sorted(self.world.nations, key=lambda x:x.area_km, reverse=True))
+        if (nations_area.index(self) / len(nations_area)) * 100 < top_under_percentage:
+            rank_stats.append([nations_area.index(self), f"{self.name_formatted} is the {functions.ordinal(nations_area.index(self)+1)} biggest nation (area)"])
+        
+        nations_towns = list(sorted(self.world.nations, key=lambda x:len(x.towns), reverse=True))
+        if (nations_towns.index(self) / len(nations_towns)) * 100 < top_under_percentage:
+            rank_stats.append([nations_towns.index(self), f"{self.name_formatted} is {functions.ordinal(nations_towns.index(self)+1)} on the total town leaderboard"])
+        
+        rank_stats = [i[1] for i in sorted(rank_stats, key=lambda x: x[0])]
+        stats += rank_stats
+
+        return stats
 
 class Town:
 
@@ -155,9 +253,10 @@ class Town:
         self.daily_tax : float = None
         self.bank : float = None
         self.ruler : str = None
-        self.peaceful : bool = None
+        self.public : bool = None
         self.founded : datetime.date = None
-        self.culture : str = None
+        self.culture : Culture = None
+        self.religion : Religion = None
 
         self._parse_desc()
     
@@ -280,10 +379,10 @@ class Town:
                 except:
                     pass
                     
-            if tag.string and "Peaceful:" in tag.string:
+            if tag.string and "Public:" in tag.string:
                 try:
-                    self.peaceful = tag.parent.get_text().split("Peaceful: ")[1]
-                    self.peaceful = True if self.peaceful == "true" else False
+                    public = tag.parent.get_text().split("Public: ")[1]
+                    self.public = True if public == "true" else False
                 except:
                     pass
 
@@ -295,9 +394,15 @@ class Town:
             
             if tag.string and "🕎 Culture -" in tag.string:
                 try:
-                    self.culture = tag.parent.get_text().split("🕎 Culture - ")[1]
-                    if self.culture.replace(" ", "") == "":
+                    self.culture = Culture(self.world, tag.parent.get_text().split("🕎 Culture - ")[1])
+                    if self.culture.name.replace(" ", "") == "":
                         self.culture = None
+                except:
+                    pass
+            
+            if tag.string and "Town Religion -" in tag.string:
+                try:
+                    self.religion = Religion(self.world, tag.parent.get_text().split("Town Religion - ")[1])
                 except:
                     pass
     
@@ -325,6 +430,21 @@ class Town:
 
         
         return players
+
+    @property 
+    def borders(self) -> typing.List[dynmap_w.Town]:
+        borders = []
+        for self_point_group in self.points:
+            self_polygon = shapely.geometry.Polygon(self_point_group)
+
+            for town in self.world.towns:
+                for point_group in town.points:
+                    if town not in borders and town != self and town.name not in ["Rulerspawn", "Unclaimed"]:
+                        polygon = shapely.geometry.Polygon(point_group)
+                        if polygon.intersects(self_polygon):
+                            borders.append(town)
+        
+        return borders
 
     def __eq__(self, other):
         if other and other.name == self.name:
@@ -384,6 +504,8 @@ class World():
         
         self.players : typing.List[Player] = []
         self.nations : typing.List[Nation] = []
+        self.cultures : typing.List[Culture] = []
+        self.religions : typing.List[Religion] = []
 
         for player in data["players"]:
             self.players.append(Player(self.client, player))
@@ -411,8 +533,11 @@ class World():
                         
         
         for town in self.towns:
-            if town.nation and town.nation.name not in [n.name for n in self.nations if n != None] and town.nation.name.replace(" ", "") != "":
-
+            if town.culture and town.culture not in self.cultures:
+                self.cultures.append(town.culture)
+            if town.religion and town.religion not in self.religions:
+                self.religions.append(town.religion)
+            if town.nation and town.nation not in self.nations:
                 self.nations.append(town.nation)
                         
 
@@ -438,6 +563,35 @@ class World():
 
         return None   
     
+    def get_culture(self, name : str, case_sensitive = True) -> dynmap_w.Nation:
+        for culture in self.cultures:
+            if culture.name == name or (not case_sensitive and culture.name.lower() == name.lower()):
+                return culture 
+
+        return None   
+    
+    def get_religion(self, name : str, case_sensitive = True) -> dynmap_w.Nation:
+        for religion in self.religions:
+            if religion.name == name or (not case_sensitive and religion.name.lower() == name.lower()):
+                return religion 
+
+        return None   
+
+    def get_all_town_borders(self):
+
+        response : typing.Dict[str, typing.List[Nation]] = {}
+
+        for town in self.towns:
+            if town.name not in response:
+                borders = town.borders
+
+                response[town.name] = borders
+                for borders_town in borders:
+                    if borders_town.name not in response:
+                        response[borders_town.name] = []
+                    response[borders_town.name].append(town)
+        return response
+    
     def to_dict(self):
         return {
             "players":[p.to_dict() for p in self.players],
@@ -446,3 +600,4 @@ class World():
         }
     
     
+

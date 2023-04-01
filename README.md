@@ -18,6 +18,8 @@ A discord bot for RulerCraft which shows many stats and allows you to interact w
     - /get town - town info
     - /get nation - nation info
     - /get world - world total info
+    - /get culture - culture info
+    - /get religion - religion info
     - /get raw - raw data for projects
 - /compare
     - /compare towns - compare two towns
@@ -39,6 +41,10 @@ A discord bot for RulerCraft which shows many stats and allows you to interact w
     - /top towns area - Rank towns by claimed area
     - /top towns residents - Rank towns by total residents
     - /top towns age - Rank towns by age in days
+    - /top religions followers - Rank religions by follower count
+    - /top religions towns - Rank religions by town count 
+    - /top cultures residents - Rank cultures by total resident count
+    - /top cultures towns - Rank cultures by total town count
 - /notifications
     - /notifications enable - Enable notifications in a channel
     - /notifications disable - Disable notifications in a channel
@@ -47,3 +53,6 @@ A discord bot for RulerCraft which shows many stats and allows you to interact w
 - /poll
     - /poll poll - Yes/no poll
     - /poll quesiton - Multi-choice poll
+- /info
+    - /info help - Help command, shows a command list
+    - /info info - Bot info with some stats

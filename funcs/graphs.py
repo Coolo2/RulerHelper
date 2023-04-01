@@ -27,26 +27,34 @@ def save_graph(data : dict, title : str, x : str, y : str, chartType, highlight 
     matplotlib.rcParams["xtick.labelsize"] = 7
 
     fig = plt.figure()
-    fig.patch.set_facecolor('#2F3136')
+    #fig.patch.set_facecolor('#2F3136')
 
     ax = plt.axes()
-    ax.patch.set_facecolor('#202225')
+    #ax.patch.set_facecolor('#202225')
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
-    barlist = chartType(data.keys(), data.values())
+    if chartType == plt.pie:
+        barlist, labels, pct_texts = plt.pie(data.values(), labels=data.keys(), autopct='%1.1f%%', textprops={'fontsize': 7, "color":"white"}, rotatelabels=True, radius=1, startangle=160)
+        
+        for label, pct_text in zip(labels, pct_texts):
+            pct_text.set_rotation(label.get_rotation())
+    else:
+        barlist = chartType(data.keys(), data.values())
+        plt.subplots_adjust(bottom=0.3)
+
     plt.title(title)
     plt.xlabel(x)
     plt.ylabel(y)
 
     plt.xticks(rotation=270)
-    plt.subplots_adjust(bottom=0.3)
+    
 
     if highlight:
         
         barlist[highlight].set_color('r')
 
     buf = io.BytesIO()
-    plt.savefig(buf, facecolor=fig.get_facecolor(), dpi=300)
+    plt.savefig(buf, dpi=300, transparent=True)
     buf.seek(0)
 
     plt.close()
@@ -111,20 +119,20 @@ def plot_world(world : world.World, plot_players = False, tracking : Tracking = 
     plt.title(f"RulerCraft Earth ({len(world.towns)} towns)")
 
     plt.xticks(rotation=270)
-    plt.subplots_adjust(bottom=0.3)
+    #plt.subplots_adjust(bottom=0.3)
 
     plt.xlim([0-xw, xw])
     plt.ylim([yw, 0-yw])
 
     buf = io.BytesIO()
-    plt.savefig(buf, facecolor=fig.get_facecolor(), dpi=500)
+    plt.savefig(buf, dpi=500, transparent=True)
     buf.seek(0)
 
     plt.close()
 
     return buf
 
-def plot_towns(towns : typing.List[world.Town], outposts=True, show_earth=False, plot_spawn=True):
+def plot_towns(towns : typing.List[world.Town], outposts=True, show_earth=False, plot_spawn=True, dot_size=10):
 
     xw = 36865
     yw = 18432
@@ -171,7 +179,7 @@ def plot_towns(towns : typing.List[world.Town], outposts=True, show_earth=False,
         
         for town in towns:
         
-            plt.scatter([town.x], [town.z], color=town.border_color, zorder=3, s=10)
+            plt.scatter([town.x], [town.z], color=town.border_color, zorder=3, s=dot_size)
 
     if show_earth:
         img = plt.imread("earth.png")
@@ -185,7 +193,7 @@ def plot_towns(towns : typing.List[world.Town], outposts=True, show_earth=False,
     plt.axis('off')
 
     buf = io.BytesIO()
-    plt.savefig(buf, facecolor=fig.get_facecolor(), dpi=500, bbox_inches='tight')
+    plt.savefig(buf, dpi=500, bbox_inches='tight', transparent=True)
     buf.seek(0)
 
     plt.close()

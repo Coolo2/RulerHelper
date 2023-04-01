@@ -205,14 +205,6 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
         # Page 6 - Security
         content += "newpage"
         content += "__Security__\n\n"
-
-            # Peace
-        if town_1.peaceful == town_2.peaceful:
-            content += f"Both **{town_1.name_formatted}** and **{town_2.name_formatted}** {'are' if town_1.peaceful else 'are not'} peaceful which means they are {'likely safe from attack' if town_1.peaceful else 'under risk of attack'}. "
-        elif town_1.peaceful:
-            content += f"Only **{town_1.name_formatted}** is peaceful which means that they are less likely to be attacked than {town_2.name_formatted}. "
-        else:
-            content += f"Only **{town_2.name_formatted}** is peaceful which means that they are less likely to be attacked than {town_1.name_formatted}. "
         
             # Local resources
         content += f"{town_1.name_formatted} has **${town_1.bank:,.0f}** and **{town_1.total_residents} resident{'' if town_1.total_residents == 1 else 's'}**, and {town_2.name_formatted} has **${town_2.bank:,.0f}** and **{town_2.total_residents} resident{'' if town_2.total_residents == 1 else 's'}** which can be used in defense or attack for both. "

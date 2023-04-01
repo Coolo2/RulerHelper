@@ -41,7 +41,7 @@ async def setup_hook():
     for extension in extensions:
         await bot.load_extension(f"cmds.{extension}")
 
-    await bot.load_extension("cogs.errors")
+    #await bot.load_extension("cogs.errors")
     await bot.load_extension("cogs.events")
 
 bot.setup_hook = setup_hook
