@@ -8,7 +8,6 @@ from discord.ext import commands
 
 import dynmap
 from dynmap import world as dynmap_w 
-from dynmap import tracking as dynmap_t
 
 from funcs.components import paginator, commands_view, towns_view
 import setup as s
@@ -17,7 +16,7 @@ from dynmap import errors as e
 
 from funcs import functions, graphs, autocompletes
 
-import matplotlib.pyplot as plt
+from matplotlib.pyplot import pie
 
 class Get(commands.GroupCog, name="get", description="All get commands"):
 
@@ -35,20 +34,16 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         await interaction.response.defer()
 
-        tracking = self.client.get_tracking()
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
-        embed = discord.Embed(title=f"Online players ({len(world.players)})",
+        world : dynmap_w.World = self.client.world
+        embed = discord.Embed(title=f"Online players ({len(world.online_players)})",
             color=s.embed)
         
-        file_name = graphs.plot_world(world, True, tracking)
+        file_name = graphs.plot_world(world, True)
         graph = discord.File(file_name, filename="world_map.png")
 
         description_string = ""
-        for player in world.players:
-            tracking_player : dynmap_t.TrackPlayer = tracking.get_player(player.name)
-
-            description_string += f"**{player.name}**:    [{player.x:,d}, {player.y:,d}, {player.z:,d}]({self.client.url}?x={player.x}&z={player.z}&zoom=8) (`{round((tracking_player.total_online_seconds / tracking_player.tracking.total_tracked_seconds) * 100)}%`)\n"
+        for player in world.online_players:
+            description_string += f"**{player.name}**:    [{player.x:,d}, {player.y:,d}, {player.z:,d}]({self.client.url}?x={player.x}&z={player.z}&zoom=8) (`{round((player.total_online / world.total_tracked) * 100)}%`)\n"
         
         embed.set_image(url="attachment://world_map.png")
 
@@ -62,36 +57,32 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         #print_here
 
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
-        tracking_player : dynmap_t.TrackPlayer = self.client.get_tracking().get_player(player, case_sensitive=False)
+        world : dynmap_w.World = self.client.world
         player : dynmap_w.Player = world.get_player(player, case_sensitive=False)
 
-        if not tracking_player:
+        if not player:
             raise e.MildError("Player not found")
 
-        embed = discord.Embed(title=f"Player: {tracking_player.name}",
+        embed = discord.Embed(title=f"Player: {player.name}",
                 color=s.embed)
 
-        likely_residency = tracking_player.get_likely_residency()
-        notable_statistics = tracking_player.get_notable_statistics()
+        likely_residency = player.likely_residency
+        notable_statistics = player.get_notable_statistics()
 
-        if player:
-            embed.add_field(name="Health", value=player.health)
-            embed.add_field(name="Armour", value=player.armor)
-            embed.add_field(name="Coordinates", value=f"[{player.x}, {player.y}, {player.z}]({self.client.url}?x={player.x}&z={player.z}&zoom=10)")
-
-            embed.set_thumbnail(url=player.avatar)
-        else:
+        if not player.online:
             embed.description = "*Player is offline, using last seen data.*"
 
-            embed.add_field(name="Coordinates", value=f"[{tracking_player.last_x}, {tracking_player.last_y}, {tracking_player.last_z}]({self.client.url}?x={tracking_player.last_x}&z={tracking_player.last_z}&zoom=10)")
+        embed.add_field(name="Health", value=player.health)
+        embed.add_field(name="Armour", value=player.armor)
+        embed.add_field(name="Coordinates", value=f"[{player.x}, {player.y}, {player.z}]({self.client.url}?x={player.x}&z={player.z}&zoom=10)")
+        embed.set_thumbnail(url=self.client.url + player.avatar_path if "." not in player.name else None)
 
-        embed.add_field(name="Town", value=tracking_player.last_town)
-        embed.add_field(name="Likely residency", value=f"{likely_residency.town.name_formatted} ({likely_residency.town.nation.name_formatted if likely_residency.town.nation else 'Unknown'})" if likely_residency and likely_residency.town else "Unknown")
-        embed.add_field(name="Online", value=f"{functions.generate_time(tracking_player.total_online_seconds)} <t:{round(tracking_player.last_seen_timestamp)}:R>")
-        embed.add_field(name="Visited Towns", value=f"{len(tracking_player.visited)} (`{(len(tracking_player.visited) / len(world.towns)) * 100:,.1f}%`)")
+        embed.add_field(name="Town", value=player.current_town.name_formatted if player.current_town else "Wilderness")
+        embed.add_field(name="Likely residency", value=f"{likely_residency.name_formatted} ({likely_residency.nation.name_formatted if likely_residency.nation else 'Unknown'})" if likely_residency else "Unknown")
+        embed.add_field(name="Online", value=f"{functions.generate_time(player.total_online)} <t:{round(player.last_online.timestamp())}:R>")
+        embed.add_field(name="Visited Towns", value=f"{len(player.visited)} (`{(len(player.visited) / len(world.towns)) * 100:,.1f}%`)")
 
-        dc = tracking_player.find_discord()
+        dc = player.find_discord(self.bot)
 
         if dc:
             embed.add_field(name="Discord Account", value=f"<@{dc}>")
@@ -99,15 +90,15 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         if len(notable_statistics) > 0:
             embed.add_field(name="Notable Statistics", value="- " + "\n- ".join(notable_statistics), inline=False)
 
-        embed.set_footer(text=f"*Server tracking started {int(tracking_player.tracking.total_tracked_seconds/3600/24)} days ago.")
+        embed.set_footer(text=f"*Server tracking started {int(world.total_tracked/3600/24)} days ago.")
 
         view_commands = []
 
-        if tracking_player.town:
-            view_commands.append(commands_view.Command("get town", "Town Info", (tracking_player.last_town,), button_style=discord.ButtonStyle.primary))
-        if tracking_player.town and likely_residency != tracking_player.town.town:
-            view_commands.append(commands_view.Command("get town", "Likely Residency Info", (likely_residency.town.name,), button_style=discord.ButtonStyle.primary))
-        view_commands.append(commands_view.Command("history player visited_towns", "Visited Towns", (tracking_player.name,)))
+        if player.current_town:
+            view_commands.append(commands_view.Command("get town", "Town Info", (player.current_town.name,), button_style=discord.ButtonStyle.primary))
+        if likely_residency and likely_residency != player.current_town:
+            view_commands.append(commands_view.Command("get town", "Likely Residency Info", (likely_residency.name,), button_style=discord.ButtonStyle.primary))
+        view_commands.append(commands_view.Command("history player visited_towns", "Visited Towns", (player.name,)))
         
         c_view = commands_view.CommandsView(self, view_commands)
 
@@ -121,13 +112,11 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         await interaction.response.defer()
 
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world : dynmap_w.World = self.client.world
         town : dynmap_w.Town = world.get_town(town.replace(" ", "_"), case_sensitive=False)
 
         if not town:
             raise e.MildError("Town not found")
-        
-        tracking_town : dynmap_t.TrackTown = self.client.get_tracking().get_town(town.name, case_sensitive=False)
 
         borders = town.borders
         
@@ -136,7 +125,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         total_residents = world.total_residents
         total_area = town.area_km
-        total_online = tracking_town.total_activity
+        total_online = town.total_activity
 
         view_commands = [
             commands_view.Command("history town bank", "Bank History", (town.name,)),
@@ -170,7 +159,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         if len(town.points) > 1:
             c_view.add_item(button)
         
-        notable_statistics = tracking_town.get_notable_statistics()
+        notable_statistics = town.get_notable_statistics()
 
         embed = discord.Embed(
             title=f"Town: {town.name.replace('_', ' ')}", 
@@ -185,7 +174,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.add_field(name="Coordinates", value=f"[{town.x:,d}, {town.y:,d}, {town.z:,d}]({self.client.url}?x={town.x}&z={town.z}&zoom=10)")
         embed.add_field(name="Total Residents", value=f"{town.total_residents} (`{(town.total_residents/total_residents)*100:.1f}%`)")
         embed.add_field(name="Area", value=f"{total_area:,.1f}km² ({round((total_area*(1000^2))/256):,d} plots)")
-        embed.add_field(name="Activity", value=f"`{functions.generate_time(total_online)}` <t:{round(tracking_town.last_activity_timestamp)}:R>")
+        embed.add_field(name="Activity", value=f"`{functions.generate_time(total_online)}` <t:{round(town.last_activity.timestamp())}:R>")
         embed.add_field(name="Founded", value=f"{town.founded.strftime('%b %d %Y')} ({town.age} days ago)")
         embed.add_field(name="Public", value=str(town.public))
         embed.add_field(name="Population Density", value=f"{round(((total_area/town.total_residents)*(1000^2))/256):,d} plots/resident")
@@ -221,7 +210,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
             "", 
             "", 
             "", 
-            plt.pie
+            pie
         )
         
         graph = discord.File(file_name, filename="pie_chart.png")
@@ -250,7 +239,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
             "", 
             "", 
             "", 
-            plt.pie
+            pie
         )
         
         graph = discord.File(file_name, filename="pie_chart.png")
@@ -270,7 +259,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         await interaction.response.defer()
 
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world : dynmap_w.World = self.client.world
         nation : dynmap_w.Nation = world.get_nation(nation.replace(" ", "_"), case_sensitive=False)
 
         if not nation:
@@ -334,7 +323,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
     async def _culture(self, interaction : discord.Interaction, culture : str):
         await interaction.response.defer()
 
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world : dynmap_w.World = self.client.world
         culture : dynmap_w.Culture = world.get_culture(culture, case_sensitive=False)
 
         if not culture:
@@ -353,10 +342,10 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.add_field(name="Residents", value=str(culture.total_residents))
         embed.add_field(name=f"Towns ({len(towns)})", value="`" + "`, `".join([t.name for t in towns]) + "`", inline=False)
 
-        embed.set_thumbnail(url="attachment://culture_towns.png")
+        embed.set_image(url="attachment://culture_towns.png")
 
         view = discord.ui.View(timeout=3600)
-        view.add_item(towns_view.SelectTowns(self, self.bot.tree, towns))
+        view.add_item(towns_view.SelectTowns(self, self.bot.tree, towns[25:]))
 
         await interaction.followup.send(embed=embed, file=graph, view=view)
     
@@ -365,7 +354,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
     async def _religion(self, interaction : discord.Interaction, religion : str):
         await interaction.response.defer()
 
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world : dynmap_w.World = self.client.world
         religion : dynmap_w.Religion = world.get_religion(religion, case_sensitive=False)
 
         if not religion:
@@ -384,10 +373,10 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.add_field(name="Followers", value=str(religion.total_followers))
         embed.add_field(name=f"Towns ({len(towns)})", value="`" + "`, `".join([t.name for t in towns]) + "`", inline=False)
 
-        embed.set_thumbnail(url="attachment://religion_towns.png")
+        embed.set_image(url="attachment://religion_towns.png")
 
         view = discord.ui.View(timeout=3600)
-        view.add_item(towns_view.SelectTowns(self, self.bot.tree, towns))
+        view.add_item(towns_view.SelectTowns(self, self.bot.tree, towns[:25]))
 
         await interaction.followup.send(embed=embed, file=graph, view=view)
     
@@ -398,8 +387,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         await interaction.response.defer()
         
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
-        tracking = self.client.get_tracking()
+        world : dynmap_w.World = self.client.world
 
         file_name = graphs.plot_world(world)
         graph = discord.File(file_name, filename="world_map.png")
@@ -407,15 +395,12 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         total_area = 0
         total_town_value = 0
         total_residents = 0
-        known_players = 0
 
         for town in world.towns:
             total_area += town.area_km
             total_town_value += town.bank
             total_residents += town.total_residents
         
-        for player in tracking.players:
-            known_players += 1
 
         embed = discord.Embed(title="RulerCraft Earth", color=s.embed)
         embed.set_image(url="attachment://world_map.png")
@@ -424,7 +409,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.add_field(name="Total nations", value=f"{len(world.nations)}")
         embed.add_field(name="Total town value", value=f"${total_town_value:,.2f}")
         embed.add_field(name="Total claimed area", value=f"{total_area:,.1f}km² ({round((total_area*(1000^2))/256):,d} plots)")
-        embed.add_field(name="Total residents", value=f"{total_residents:,d} ({known_players:,d} known)")
+        embed.add_field(name="Total residents", value=f"{total_residents:,d} ({len(world.players):,d} known)")
         embed.add_field(name="Total cultures", value=f"{len(world.cultures):,d}")
         embed.add_field(name="Total religions", value=f"{len(world.religions):,d}")
 
@@ -434,19 +419,13 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
     async def _raw(self, interaction : discord.Interaction):
         await interaction.response.defer()
 
-        tracking = self.client.get_tracking()
-        server = json.dumps(tracking.raw)
-        world_dict = json.dumps(self.client.cached_worlds["RulerEarth"].to_dict())
-
-        s_server = io.StringIO()
-        s_server.write(server)
-        s_server.seek(0)
+        world_dict = json.dumps(self.client.world.to_dict())
 
         s_world = io.StringIO()
         s_world.write(world_dict)
         s_world.seek(0)
         
-        await interaction.followup.send(files=[discord.File(fp=s_server, filename="server_data.json"), discord.File(fp=s_world, filename="world_data.json")])
+        await interaction.followup.send(file=discord.File(fp=s_world, filename="world_data.json"))
     
 
 async def setup(bot : commands.Bot):

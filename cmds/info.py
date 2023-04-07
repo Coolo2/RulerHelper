@@ -59,19 +59,18 @@ class Info(commands.GroupCog, name="info", description="Bot info"):
     @app_commands.command(name="info", description="Get basic info and stats about the bot")
     async def _info(self, interaction : discord.Interaction):
         #print_here
-        tracking = self.client.get_tracking()
         
         embed = discord.Embed(title="Bot information", description="Ruler Helper is a bot created by <@368071242189897728> to provide some helpful tools to nations and towns.", color=s.embed)
 
-        embed.add_field(name="Tracking time", value=f"{int(tracking.total_tracked_seconds/3600/24)}d")
+        embed.add_field(name="Tracking time", value=f"{int(self.client.world.total_tracked/3600/24)}d")
         embed.add_field(name="Servers", value=str(len(self.bot.guilds)))
         embed.add_field(name="Database size", value=f"{round(os.path.getsize('rulercraft/server_data.pickle')/1000/1000, 2)}MB")
-        embed.add_field(name="Last refresh", value=f"<t:{round(tracking.last.timestamp())}:R>")
+        embed.add_field(name="Last refresh", value=f"<t:{round(self.client.world.last_refreshed.timestamp())}:R>")
 
         total_linked_accounts = 0
 
-        for player in tracking.players:
-            if player.find_discord():
+        for player in self.client.world.players:
+            if player.find_discord(self.bot):
                 total_linked_accounts += 1
         
         embed.add_field(name="Linked Discord accounts", value=str(total_linked_accounts))

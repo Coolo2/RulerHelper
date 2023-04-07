@@ -2,7 +2,6 @@ from __future__ import annotations
 import typing
 
 if typing.TYPE_CHECKING:
-    from dynmap.client import Client
     from dynmap import world as dynmap_w
 
 import typing
@@ -11,18 +10,53 @@ import datetime
 from bs4 import BeautifulSoup
 import math
 
-import numpy as np
 import shapely.geometry
 from funcs import functions
+
+import discord
+
+VERSION = 1
+IGNORE_ATTRS = ["world"]
 
 def calculateDistance(coordinate1, coordinate2):
     dist = math.sqrt((coordinate1[1] - coordinate1[0])**2 + (coordinate2[1] - coordinate2[0])**2)
     return dist
 
+def to_dict(obj : typing.Callable):
+    return {k:(v.to_dict() if hasattr(v, "to_dict") else [(i.to_dict() if hasattr(i, "to_dict") else i.__dict__ if hasattr(i, "__dict__") else i) for i in v] if hasattr(v, "__iter__") and type(v) != str else v.__dict__ if hasattr(v, "__dict__") else v)  for k, v in obj.__dict__.items()}
+
 class Player:
 
-    def __init__(self, client : Client, data : dict):
-        self.world = data["world"] 
+    def __init__(self, world : dynmap_w.World):
+        self.raw : dict = None 
+
+        self.world_name : str = None 
+        self.armor : int = None
+        self.name : str = None
+        self.x : int = None
+        self.y : int = None
+        self.z : int = None
+        self.health : int = None
+
+        self.distance = None # To be updated with get_town_nearby
+        self.online : bool = None
+
+        self.total_online : int = 0
+        self.last_online : datetime.datetime = None
+
+        self.world = world
+
+        self.avatar_path = f"/tiles/faces/32x32/{self.name}.png"
+
+        self.likely_residency_set : str = None 
+        self.discord_id_set : int = None
+
+        self.loaded_old_data = False
+    
+    def load_data(self, data : dict):
+        self.raw = data 
+
+        self.world_name = data["world"]
         self.armor = data["armor"] 
         self.name = data["account"] 
         self.x = round(data["x"])
@@ -30,36 +64,98 @@ class Player:
         self.z = round(data["z"])
         self.health = data["health"]
 
-        self.distance = None # To be updated with get_town_nearby
-
-        self.client = client
-
-        self.avatar = f"{client.url}/tiles/faces/32x32/{self.name}.png"
-    
     @property
     def current_town(self) -> dynmap_w.Town:
 
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
-
         nearby_town = None
 
-        for town in world.towns:
+        for town in self.world.towns_future:
             if town.is_coordinate_in_town(self.x, self.z):
                 nearby_town = town
 
         return nearby_town
+
+    @property 
+    def is_mayor(self) -> bool:
+        for town in self.world.towns_future:
+            if town.ruler == self.name:
+                return True 
+        return False
+
+    @property
+    def visited(self) -> typing.Dict[str, int]:
+        
+        visited_towns = {}
+
+        for town in self.world.towns_future:
+            if self.name in town.visited:
+                visited_towns[town.name] = town.visited[self.name]
+        
+        visited_towns = dict(sorted(visited_towns.items(), key=lambda x: x[1]["total"], reverse=True))
+        
+        return visited_towns
+
+    @property 
+    def likely_residency(self) -> dynmap_w.Town:
+        if self.likely_residency_set:
+            return self.world.get_town(self.likely_residency_set)
+        
+        visited : typing.List[str] = self.visited.keys()
+
+        for town_name in visited:
+            town = self.world.get_town(town_name)
+
+            if town and town.ruler == self.name:
+                return town 
+        
+        return self.world.get_town(list(visited)[0]) if len(visited) > 0 else None
+
+    def get_notable_statistics(self, top_under_percentage : int = 10) -> typing.List[str]:
+        stats = []
+
+        rank_stats : typing.List[typing.List[int, str]] = []
+
+        players_activity = list(sorted(self.world.players, key=lambda x:x.total_online, reverse=True))
+        if (players_activity.index(self) / len(players_activity)) * 100 < top_under_percentage:
+            rank_stats.append([players_activity.index(self), f"{self.name} is the {functions.ordinal(players_activity.index(self)+1)} most active player"])
+        
+        players_visited = list(sorted(self.world.players, key=lambda x:len(x.visited), reverse=True))
+        if (players_visited.index(self) / len(players_visited)) * 100 < top_under_percentage:
+            rank_stats.append([players_visited.index(self), f"{self.name} is {functions.ordinal(players_visited.index(self)+1)} on the visited towns leaderboard"])
+        
+        rank_stats = [i[1] for i in sorted(rank_stats, key=lambda x: x[0])]
+        stats += rank_stats
+
+        return stats
+
+    def find_discord(self, bot : discord.Client):
+        
+        if self.discord_id_set:
+            return self.discord_id_set
+
+        for guild in bot.guilds:
+            guild : discord.Guild = guild
+
+            for member in guild.members:
+                if str(self.name).lower().replace(".", "") in str(member.nick).lower() or str(self.name).lower().replace(".", "") in str(member.name).lower():
+                    return member.id 
     
+    @classmethod
+    def load_old(self, world : dynmap_w.World, old_player : dynmap_w.Player):
+        s = self(world)
+        s.load_data(old_player.raw)
+
+        for attr_name, attr_value in old_player.__dict__.items():
+            if attr_name in IGNORE_ATTRS:
+                continue
+            setattr(s, attr_name, attr_value)
+        
+        return s
+
     def __eq__(self, other):
-        if other and other.name == self.name:
+        if other and other == self.name or (hasattr(other, "name") and other.name == self.name):
             return True 
         return False
-    
-    def to_dict(self):
-        return {
-            "name":self.name, "health":self.health, "armor":self.armor, "coordinates":[self.x, self.y, self.z], "avatar":self.avatar
-        }
-
-
 
 class _CultureOrReligion:
     # Progressive generation
@@ -82,6 +178,17 @@ class _CultureOrReligion:
         for town in self.towns:
             c += town.total_residents 
         return c
+
+    @classmethod
+    def load_old(self, world : dynmap_w.World, old_cr : dynmap_w._CultureOrReligion):
+        s = self(world, old_cr.name)
+
+        for attr_name, attr_value in old_cr.__dict__.items():
+            if attr_name in IGNORE_ATTRS:
+                continue
+            setattr(s, attr_name, attr_value)
+        
+        return s
     
     def __eq__(self, other):
         if other and other.name == self.name:
@@ -187,13 +294,23 @@ class Nation:
         
         return borders
 
+    @classmethod
+    def load_old(self, world : dynmap_w.World, old_nation : dynmap_w.Nation):
+        s = self(world, old_nation.name)
+
+        for attr_name, attr_value in old_nation.__dict__.items():
+            if attr_name in IGNORE_ATTRS:
+                continue
+            setattr(s, attr_name, attr_value)
+        
+        return s
+
     def __eq__(self, other):
-        if other and other.name == self.name:
+        if other and other == self.name or (hasattr(other, "name") and other.name == self.name):
             return True 
         return False
     
-    def to_dict(self):
-        return {"name":self.name, "total_residents":self.total_residents, "towns":[t.name for t in self.towns], "plots":round((self.area_km*(1000^2))/256), "capital":self.capital.name}
+    
 
     def get_notable_statistics(self, top_under_percentage : int = 10) -> typing.List[str]:
         stats = []
@@ -238,8 +355,7 @@ class Town:
 
             self.border_color = area_data["color"]
             self.fill_color = area_data["fillcolor"]
-
-            self.add_area_data(area_data)
+            # Add world data seperately
         
         # Added externally
 
@@ -257,6 +373,13 @@ class Town:
         self.founded : datetime.date = None
         self.culture : Culture = None
         self.religion : Religion = None
+
+        self.bank_history : typing.Dict[str, float] = {}
+        self.total_residents_history : typing.Dict[str, int] = {}
+        self.visited : typing.Dict[str, typing.Dict[str, int]] = {}
+
+        self.last_updated : datetime.datetime = None
+        self.loaded_old_data = False
 
         self._parse_desc()
     
@@ -293,7 +416,7 @@ class Town:
 
         return total_area / (1000^2)
 
-        
+    
     
     def add_area_data(self, area_data):
 
@@ -423,7 +546,7 @@ class Town:
 
         players : typing.List[Player] = []
 
-        for player in self.world.players:        
+        for player in self.world.online_players:        
             if self.is_coordinate_in_town(player.x, player.z):
                 players.append(player)
         
@@ -445,35 +568,129 @@ class Town:
                             borders.append(town)
         
         return borders
+    
+    @property
+    def total_activity(self) -> int:
+
+        total = 0 
+
+        for v in self.visited.values():
+            total += v["total"]
+        
+        return total
+
+    @property
+    def last_activity(self) -> datetime.datetime:
+
+        greatest = datetime.datetime(year=2020, month=1, day=2)
+
+        for v in self.visited.values():
+            if v["last"] > greatest:
+                greatest = v["last"]
+        
+        return greatest
+
+    def get_notable_statistics(self, top_under_percentage : int = 10) -> typing.List[str]:
+        stats = []
+
+        if len(self.points) > 1:
+            detatched_area_km = 0
+            for point_group in self.points:
+                poly = shapely.geometry.Polygon(point_group)
+                if not poly.contains(shapely.geometry.Point(self.x, self.z)):
+                    detatched_area_km += poly.area / (1000^2)
+            detatched_area_percentage = (detatched_area_km / self.area_km) * 100
+
+            stats.append(f"Detatched territories make up {detatched_area_percentage:,.0f}% of {self.name_formatted}'s claims")
+
+        rank_stats : typing.List[typing.List[int, str]] = []
+
+        towns_residents = list(sorted(self.world.towns, key=lambda x:x.total_residents, reverse=True))
+        if (towns_residents.index(self) / len(towns_residents)) * 100 < top_under_percentage:
+            rank_stats.append([towns_residents.index(self), f"{self.name_formatted} is the {functions.ordinal(towns_residents.index(self)+1)} most populous town"])
+        
+        towns_balance = list(sorted(self.world.towns, key=lambda x:x.bank, reverse=True))
+        if (towns_balance.index(self) / len(towns_balance)) * 100 < top_under_percentage:
+            rank_stats.append([towns_balance.index(self), f"{self.name_formatted} is the {functions.ordinal(towns_balance.index(self)+1)} richest town"])
+        
+        towns_activity = list(sorted(self.world.towns, key=lambda x:x.total_activity, reverse=True))
+        if (towns_activity.index(self) / len(towns_activity)) * 100 < top_under_percentage:
+            rank_stats.append([towns_activity.index(self), f"{self.name_formatted} is the {functions.ordinal(towns_activity.index(self)+1)} most active town"])
+        
+        towns_area = list(sorted(self.world.towns, key=lambda x:x.area_km, reverse=True))
+        if (towns_area.index(self) / len(towns_area)) * 100 < top_under_percentage:
+            rank_stats.append([towns_area.index(self), f"{self.name_formatted} is the {functions.ordinal(towns_area.index(self)+1)} biggest town"])
+
+        towns_age = list(sorted(self.world.towns, key=lambda x:x.age, reverse=True))
+        if (towns_age.index(self) / len(towns_age)) * 100 < top_under_percentage:
+            rank_stats.append([towns_age.index(self), f"{self.name_formatted} is the {functions.ordinal(towns_age.index(self)+1)} oldest town"])
+        
+        rank_stats = [i[1] for i in sorted(rank_stats, key=lambda x: x[0])]
+        stats += rank_stats
+
+        return stats
+
+    @classmethod
+    def load_old(self, world : dynmap_w.World, old_town : dynmap_w.Town):
+        s = self(world, None)
+
+        for attr_name, attr_value in old_town.__dict__.items():
+            if attr_name in IGNORE_ATTRS:
+                continue
+            setattr(s, attr_name, attr_value)
+        
+        return s
 
     def __eq__(self, other):
-        if other and other.name == self.name:
+        if other and other == self.name or (hasattr(other, "name") and other.name == self.name):
             return True 
         return False
     
-    def to_dict(self):
-        return {
-            "name":self.name,
-            "mayor":self.ruler,
-            "bank":self.bank,
-            "border_color":self.border_color,
-            "fill_color":self.fill_color,
-            "total_residents":self.total_residents,
-            "taxes":self.daily_tax,
-            "nation":self.nation.name if self.nation else None,
-            "spawn":[self.x, self.y, self.z],
-            "icon":self.icon
-        }
+    
 
 
 
+class VisitedPlayer(Player):
+    def __init__(self, world, player : Player):
+        
+        super().__init__(world, player.raw)
 
+        self.last_seen : datetime.datetime = None
+        self.total_online : int = 0
 
 class World():
-    def __init__(self, client, data : dict, map_data : dict):
-        self.client = client
+    def __init__(self):
 
-        self._parse_data(data, map_data)
+        self.total_tracked : int = 0
+        self.last_refreshed : datetime.datetime = None
+
+        self.is_stormy = None
+        self.is_thundering = None
+        self.time = None
+        
+        self.players : typing.List[Player] = []
+        self.nations : typing.List[Nation] = []
+        self.cultures : typing.List[Culture] = []
+        self.religions : typing.List[Religion] = []
+        self.towns : typing.List[Town] = []
+
+        self.version = VERSION
+        self.loaded_old_data = False
+
+        self.next_refresh : datetime.datetime = None
+        self.process_time : datetime.timedelta = None
+
+        
+
+        #self._parse_data(data, map_data)
+
+    @property 
+    def online_players(self) -> typing.List[Player]:
+        return [p for p in self.players if p.online]
+
+    @property 
+    def towns_future(self):
+        return self.towns
 
     @property 
     def total_residents(self) -> int:
@@ -496,54 +713,11 @@ class World():
             total += town.bank
         return total
 
-    def _parse_data(self, data : dict, map_data : dict):
-
-        self.is_stormy = data["hasStorm"]
-        self.is_thundering = data["isThundering"]
-        self.time = (datetime.datetime.combine(datetime.date(1,1,1),datetime.time(0, 0, 0)) + datetime.timedelta(hours=6) + datetime.timedelta(hours=data["servertime"]/1000)).time()
-        
-        self.players : typing.List[Player] = []
-        self.nations : typing.List[Nation] = []
-        self.cultures : typing.List[Culture] = []
-        self.religions : typing.List[Religion] = []
-
-        for player in data["players"]:
-            self.players.append(Player(self.client, player))
-        
-        self.towns : typing.List[Town] = []
-
-        for area_name, area_data in map_data["sets"]["towny.markerset"]["areas"].items():
-
-            
-            if area_data["label"] not in [t.name for t in self.towns]:
-                self.towns.append(Town(self, area_data=area_data))
-            else:
-                t = self.get_town(area_data["label"])
-                t.add_area_data(area_data)
-        
-        for marker_name, marker_data in map_data["sets"]["towny.markerset"]["markers"].items():
-            for town in self.towns:
-                if town.name == marker_data["label"]:
-                    town.x = round(marker_data["x"])
-                    town.y = round(marker_data["y"])
-                    town.z = round(marker_data["z"])
-                    town.icon = marker_data["icon"]
-
-                    #town.points.append([town.x, town.z])
-                        
-        
-        for town in self.towns:
-            if town.culture and town.culture not in self.cultures:
-                self.cultures.append(town.culture)
-            if town.religion and town.religion not in self.religions:
-                self.religions.append(town.religion)
-            if town.nation and town.nation not in self.nations:
-                self.nations.append(town.nation)
-                        
-
-
-    def get_player(self, name : str, case_sensitive = True):
+    def get_player(self, name : str, case_sensitive = True, online=None):
         for player in self.players:
+            if online == True and player.online == False or online == False and player.online == True:
+                continue 
+
             if player.name == name or (not case_sensitive and player.name.lower() == name.lower()):
                 return player 
         
@@ -556,48 +730,45 @@ class World():
 
         return None    
     
-    def get_nation(self, name : str, case_sensitive = True) -> dynmap_w.Nation:
+    def get_nation(self, name : str, case_sensitive = True) -> Nation:
         for nation in self.nations:
             if nation.name == name or (not case_sensitive and nation.name.lower() == name.lower()):
                 return nation 
 
         return None   
     
-    def get_culture(self, name : str, case_sensitive = True) -> dynmap_w.Nation:
+    def get_culture(self, name : str, case_sensitive = True) -> Culture:
         for culture in self.cultures:
             if culture.name == name or (not case_sensitive and culture.name.lower() == name.lower()):
                 return culture 
 
         return None   
     
-    def get_religion(self, name : str, case_sensitive = True) -> dynmap_w.Nation:
+    def get_religion(self, name : str, case_sensitive = True) -> Religion:
         for religion in self.religions:
             if religion.name == name or (not case_sensitive and religion.name.lower() == name.lower()):
                 return religion 
 
         return None   
+    
+    
+    def load_old_world(self, old_world : dynmap_w.World):
+        for attr_name, attr_value in old_world.__dict__.items():
+            if attr_name not in ["players", "towns", "nations", "cultures", "religions"]:
+                setattr(self, attr_name, attr_value)
+            else:
+                for obj in attr_value:
+                    t : typing.Type[typing.Union[Player, Town, Nation, Culture, Religion]] = type(obj)
+                    o = t.load_old(self, obj)
+                    getattr(self, attr_name).append(o)
 
-    def get_all_town_borders(self):
 
-        response : typing.Dict[str, typing.List[Nation]] = {}
+        
 
-        for town in self.towns:
-            if town.name not in response:
-                borders = town.borders
-
-                response[town.name] = borders
-                for borders_town in borders:
-                    if borders_town.name not in response:
-                        response[borders_town.name] = []
-                    response[borders_town.name].append(town)
-        return response
     
     def to_dict(self):
-        return {
-            "players":[p.to_dict() for p in self.players],
-            "towns":[t.to_dict() for t in self.towns],
-            "nations":[n.to_dict() for n in self.nations]
-        }
+
+        return to_dict(self)
     
     
 

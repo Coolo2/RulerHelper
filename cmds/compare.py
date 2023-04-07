@@ -2,14 +2,13 @@
 import discord 
 import math
 import shapely.geometry
-import matplotlib.pyplot as plt
+from matplotlib.pyplot import bar
 
 from discord import app_commands
 from discord.ext import commands
 
 import dynmap
 from dynmap import world as dynmap_w 
-from dynmap import tracking as dynmap_t
 
 from funcs.components import paginator
 import setup as s
@@ -32,10 +31,8 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
 
         await interaction.response.defer()
 
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
-
-        town_1 : dynmap_w.Town = world.get_town(town_first.replace(" ", "_"), case_sensitive=False)
-        town_2 : dynmap_w.Town = world.get_town(town_second.replace(" ", "_"), case_sensitive=False)
+        town_1 : dynmap_w.Town = self.client.world.get_town(town_first.replace(" ", "_"), case_sensitive=False)
+        town_2 : dynmap_w.Town = self.client.world.get_town(town_second.replace(" ", "_"), case_sensitive=False)
 
         towns = [town_1, town_2]
 
@@ -44,11 +41,6 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
         
         if town_1.name == town_2.name:
             raise e.MildError("Cannot use same town twice")
-        
-        tracking = self.client.get_tracking()
-        tracking_town_1 : dynmap_t.TrackTown = tracking.get_town(town_1.name, case_sensitive=False)
-        tracking_town_2 : dynmap_t.TrackTown = tracking.get_town(town_2.name, case_sensitive=False)
-        tracking_towns = [tracking_town_1, tracking_town_2]
         
         embed = discord.Embed(title=f"Town Comparison - {town_1.name_formatted} & {town_2.name_formatted}", color=s.embed)
         content = f"__Introduction__\n\nThis is a comparison between the towns **{town_1.name_formatted}** and **{town_2.name_formatted}**. Click through with the arrows below to see the comparison!"
@@ -123,25 +115,25 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
         res = towns[index].total_residents-towns[alt_index].total_residents
         content += f"__Activity__\n\n**{towns[index].name_formatted}** has {'no' if res == 0 else res} more resident{'' if res == 1 else 's'} than {towns[alt_index].name_formatted} with **{towns[index].total_residents} residents**. Additionally, "
 
-        if tracking_town_1.total_activity > tracking_town_2.total_activity:
+        if town_1.total_activity > town_2.total_activity:
             index = 0
             alt_index = 1
         else:
             index = 1
             alt_index = 0
         
-        per_resident = [tracking_town_1.total_activity / town_1.total_residents, tracking_town_2.total_activity / town_2.total_residents]
-        perc_increase = f"{((tracking_towns[index].total_activity / tracking_towns[alt_index].total_activity) * 100) - 100:,.0f}" if tracking_towns[alt_index].total_activity != 0 else "infinite"
+        per_resident = [town_1.total_activity / town_1.total_residents, town_2.total_activity / town_2.total_residents]
+        perc_increase = f"{((towns[index].total_activity / towns[alt_index].total_activity) * 100) - 100:,.0f}" if towns[alt_index].total_activity != 0 else "infinite"
 
-        content += f"**{towns[index].name_formatted}** has had more activity (**{perc_increase}%** more) than {towns[alt_index].name_formatted}, with a total of `{functions.generate_time(tracking_towns[index].total_activity)}` playtime compared to `{functions.generate_time(tracking_towns[alt_index].total_activity)}` during the {int(tracking.total_tracked_seconds/3600/24)} days of server tracking. "
+        content += f"**{towns[index].name_formatted}** has had more activity (**{perc_increase}%** more) than {towns[alt_index].name_formatted}, with a total of `{functions.generate_time(towns[index].total_activity)}` playtime compared to `{functions.generate_time(towns[alt_index].total_activity)}` during the {int(self.client.world.total_tracked/3600/24)} days of server tracking. "
         if town_1.total_residents != 1 or town_2.total_residents != 1:
             content += f"That is `{functions.generate_time(per_resident[index])}` and `{functions.generate_time(per_resident[alt_index])}` per resident for both towns respectively."
         
         plottable = {
-            f"{towns[index].name_formatted} \ntotal":tracking_towns[index].total_activity/60, 
-            f"{towns[index].name_formatted} \nper resident":tracking_towns[index].total_activity/60/towns[index].total_residents, 
-            f"{towns[alt_index].name_formatted} \ntotal":tracking_towns[alt_index].total_activity/60,
-            f"{towns[alt_index].name_formatted} \nper resident":tracking_towns[alt_index].total_activity/60/towns[alt_index].total_residents, 
+            f"{towns[index].name_formatted} \ntotal":towns[index].total_activity/60, 
+            f"{towns[index].name_formatted} \nper resident":towns[index].total_activity/60/towns[index].total_residents, 
+            f"{towns[alt_index].name_formatted} \ntotal":towns[alt_index].total_activity/60,
+            f"{towns[alt_index].name_formatted} \nper resident":towns[alt_index].total_activity/60/towns[alt_index].total_residents, 
         }
 
         image_generators.append( 
@@ -152,7 +144,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Activity Comparison: {town_1.name_formatted} & {town_2.name_formatted}", 
                     "Town", 
                     "Activity (minutes)", 
-                    plt.bar
+                    bar
                 )
             )
         )
@@ -197,7 +189,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Bank Comparison: {town_1.name_formatted} & {town_2.name_formatted}", 
                     "Town", 
                     "Bank balance ($)", 
-                    plt.bar
+                    bar
                 )
             )
         )
@@ -221,7 +213,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Resident Comparison: {town_1.name_formatted} & {town_2.name_formatted}", 
                     "Town", 
                     "Resident count", 
-                    plt.bar
+                    bar
                 )
             )
         )
@@ -232,18 +224,23 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
         elif town_1.nation == town_2.nation:
             content += f"Additionally, both towns are a part of the **{town_1.nation.name_formatted}** nation which means they benefit from similar nation security ({town_1.nation.total_residents} extra residents). "
         else:
-            if (town_1.nation and not town_2.nation) or (town_1.nation.total_residents + len(town_1.nation.towns) ) >= (town_2.nation.total_residents + len(town_2.nation.towns)):
+            if town_2.nation and not town_1.nation  :
+                index = 1
+                alt_index = 0
+            elif (town_1.nation and not town_2.nation) or (town_1.nation.total_residents + len(town_1.nation.towns) ) >= (town_2.nation.total_residents + len(town_2.nation.towns)):
                 index = 0
                 alt_index = 1
             else:
                 index = 1
                 alt_index = 0
             
-            if towns[1].nation:
+            if towns[0].nation and towns[1].nation:
                 perc_better = ((towns[index].nation.total_residents + len(towns[index].nation.towns)) / (towns[alt_index].nation.total_residents + len(towns[alt_index].nation.towns)) * 100) - 100
                 content += f"I estimate that **{towns[index].name_formatted}** is in a {perc_better:,.0f}% better nation than {towns[alt_index].name_formatted}, with **{towns[index].nation.total_residents}** residents and **{towns[alt_index].nation.total_residents}** residents respectively. This means that **{towns[index].name_formatted}** benefits from better security and help from other towns. "
+            elif towns[0].nation:
+                content += f"**{towns[0].name_formatted}** is in a nation, unlike {towns[1].name_formatted}. This means that **{towns[0].name_formatted}** benefits from better security and help from other towns. "
             else:
-                content += f"**{towns[index].name_formatted}** is in a nation, unlike {towns[alt_index].name_formatted}. This means that **{towns[index].name_formatted}** benefits from better security and help from other towns. "
+                content += f"**{towns[1].name_formatted}** is in a nation, unlike {towns[0].name_formatted}. This means that **{towns[1].name_formatted}** benefits from better security and help from other towns. "
 
         content += f"**{town_1.name_formatted}** was founded on **{town_1.founded.strftime('%b %d %Y')}** and **{town_2.name_formatted}** was founded on **{town_2.founded.strftime('%b %d %Y')}**. "
 
@@ -256,7 +253,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
 
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
-            for t in self.client.cached_worlds["RulerEarth"].towns if current.lower().replace("_", " ") in t.name_formatted.lower() and values["town_first"].replace(" ", "_").lower() != t.name_formatted.lower()
+            for t in self.client.world.towns if current.lower().replace("_", " ") in t.name_formatted.lower() and values["town_first"].replace(" ", "_").lower() != t.name_formatted.lower()
         ][:25]
     
     @app_commands.command(name="nations", description="Compare two nations")
@@ -265,10 +262,8 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
         
         await interaction.response.defer()
 
-        world = self.client.cached_worlds["RulerEarth"]
-
-        nation_1 = world.get_nation(nation_first.replace(" ", "_"), case_sensitive=False)
-        nation_2 = world.get_nation(nation_second.replace(" ", "_"), case_sensitive=False)
+        nation_1 = self.client.world.get_nation(nation_first.replace(" ", "_"), case_sensitive=False)
+        nation_2 = self.client.world.get_nation(nation_second.replace(" ", "_"), case_sensitive=False)
 
         nations = [nation_1, nation_2]
 
@@ -312,7 +307,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Resident Comparison: {nation_1.name_formatted} & {nation_2.name_formatted}", 
                     "Nation", 
                     "Resident count", 
-                    plt.bar
+                    bar
                 )
             )
         )
@@ -322,13 +317,11 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
 
         total_activity = [0, 0]
 
-        tracking = self.client.get_tracking()
+        
         for town in nation_1.towns:
-            tracking_town = tracking.get_town(town.name)
-            total_activity[0] += tracking_town.total_activity if tracking_town else 0
+            total_activity[0] += town.total_activity 
         for town in nation_2.towns:
-            tracking_town = tracking.get_town(town.name)
-            total_activity[1] += tracking_town.total_activity if tracking_town else 0
+            total_activity[1] += town.total_activity 
         
         if total_activity[0] > total_activity[1]:
             index = 0 
@@ -337,7 +330,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
             index = 1
             alt_index = 0
         
-        content += f"__Activity__\n\n**{nations[index].name_formatted}** is more active than {nations[alt_index].name_formatted}, having a total **{functions.generate_time(total_activity[index])}** playtime compared to **{functions.generate_time(total_activity[alt_index])}** during the {int(tracking.total_tracked_seconds/3600/24)} days of server tracking. "
+        content += f"__Activity__\n\n**{nations[index].name_formatted}** is more active than {nations[alt_index].name_formatted}, having a total **{functions.generate_time(total_activity[index])}** playtime compared to **{functions.generate_time(total_activity[alt_index])}** during the {int(self.client.world.total_tracked/3600/24)} days of server tracking. "
 
         plottable = {
             f"{nations[index].name_formatted} \nplaytime":total_activity[index]/60, 
@@ -353,7 +346,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Activity Comparison: {nation_1.name_formatted} & {nation_2.name_formatted}", 
                     "Nation", 
                     "Activity (Minutes)", 
-                    plt.bar
+                    bar
                 )
             )
         )
@@ -385,7 +378,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Bank Comparison: {nation_1.name_formatted} & {nation_2.name_formatted}", 
                     "Nation", 
                     "Balance ($)", 
-                    plt.bar
+                    bar
                 )
             )
         )
@@ -417,7 +410,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Size Comparison: {nation_1.name_formatted} & {nation_2.name_formatted}", 
                     "Nation", 
                     "Size (plots)", 
-                    plt.bar
+                    bar
                 )
             )
         )
@@ -431,7 +424,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
 
         return [
             app_commands.Choice(name=n.name_formatted, value=n.name_formatted)
-            for n in self.client.cached_worlds["RulerEarth"].nations if current.lower().replace("_", " ") in n.name_formatted.lower() and values["nation_first"].replace(" ", "_").lower() != n.name_formatted.lower()
+            for n in self.client.world.nations if current.lower().replace("_", " ") in n.name_formatted.lower() and values["nation_first"].replace(" ", "_").lower() != n.name_formatted.lower()
         ][:25]
     
     @app_commands.command(name="players", description="Compare two player")
@@ -439,10 +432,8 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
     async def _players(self, interaction : discord.Interaction, player_first : str, player_second : str):
         await interaction.response.defer()
 
-        world = self.client.cached_worlds["RulerEarth"]
-        tracking = self.client.get_tracking()
-        player_1 = tracking.get_player(player_first, case_sensitive=False)
-        player_2 = tracking.get_player(player_second, case_sensitive=False)
+        player_1 = self.client.world.get_player(player_first, case_sensitive=False)
+        player_2 = self.client.world.get_player(player_second, case_sensitive=False)
         players = [player_1, player_2]
 
         if not player_1 or not player_2:
@@ -451,7 +442,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
         if player_1 == player_2:
             raise e.MildError("Cannot use same player twice")
 
-        image_generators = [(graphs.plot_world, (world, True, None, players, 20, False))]
+        image_generators = [(graphs.plot_world, (self.client.world, True, players, 20, False))]
         
         embed = discord.Embed(title=f"Player Comparison - {player_1.name} & {player_2.name}", color=s.embed)
         content = f"__Introduction__\n\nThis is a comparison between players **{player_1.name}** and **{player_2.name}**. Click through with the arrows below to see my comparison"
@@ -459,22 +450,22 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
         # Page 2 - Activity
         content += "newpage"
 
-        if player_1.total_online_seconds > player_2.total_online_seconds:
+        if player_1.total_online > player_2.total_online:
             index = 0
             alt_index = 1
         else:
             index = 1
             alt_index = 0
-        percentage_increase = ((players[index].total_online_seconds / players[alt_index].total_online_seconds) * 100) - 100
+        percentage_increase = ((players[index].total_online / players[alt_index].total_online) * 100) - 100
 
         percentages_in_main_town = [
-            (player_1.visited[list(player_1.visited)[0]]["total"] / player_1.total_online_seconds) * 100,
-            (player_2.visited[list(player_2.visited)[0]]["total"] / player_2.total_online_seconds) * 100
+            ((player_1.visited[list(player_1.visited)[0]]["total"] if len(list(player_1.visited)) > 0 else 0) / player_1.total_online) * 100,
+            ((player_2.visited[list(player_2.visited)[0]]["total"] if len(list(player_2.visited)) > 0 else 0) / player_2.total_online) * 100
         ]
         plottable = {
-            f"{player_1.name} \nTotal time":player_1.total_online_seconds/60, 
+            f"{player_1.name} \nTotal time":player_1.total_online/60, 
             f"{player_1.name} \nTime in {list(player_1.visited)[0]}":player_1.visited[list(player_1.visited)[0]]["total"]/60, 
-            f"{player_2.name} \nTotal time":player_2.total_online_seconds/60,
+            f"{player_2.name} \nTotal time":player_2.total_online/60,
             f"{player_2.name} \nTime in {list(player_2.visited)[0]}":player_2.visited[list(player_2.visited)[0]]["total"]/60, 
         }
         image_generators.append( 
@@ -485,12 +476,12 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Activity Comparison: {player_1.name} & {player_2.name}", 
                     "Player", 
                     "Activity (minutes)", 
-                    plt.bar
+                    bar
                 )
             )
         )
 
-        content += f"__Activity__\n\nDuring the {int(tracking.total_tracked_seconds/3600/24)} days of server tracking, **{players[index].name}** has been online for **{percentage_increase:,.0f}%** longer than **{players[alt_index].name}**, with a total `{functions.generate_time(players[index].total_online_seconds)}` compared to `{functions.generate_time(players[alt_index].total_online_seconds)}`. {players[index].name} spent **{percentages_in_main_town[index]:,.0f}%** of their time in {list(players[index].visited)[0]}, while {players[alt_index].name} spent **{percentages_in_main_town[alt_index]:,.0f}%** of their time in {list(players[alt_index].visited)[0]}. I last saw **{players[index].name}** online <t:{round(players[index].last_seen_timestamp)}:R>, and **{players[alt_index].name}** <t:{round(players[alt_index].last_seen_timestamp)}:R>"
+        content += f"__Activity__\n\nDuring the {int(self.client.world.total_tracked/3600/24)} days of server tracking, **{players[index].name}** has been online for **{percentage_increase:,.0f}%** longer than **{players[alt_index].name}**, with a total `{functions.generate_time(players[index].total_online)}` compared to `{functions.generate_time(players[alt_index].total_online)}`. {players[index].name} spent **{percentages_in_main_town[index]:,.0f}%** of their time in {list(players[index].visited)[0]}, while {players[alt_index].name} spent **{percentages_in_main_town[alt_index]:,.0f}%** of their time in {list(players[alt_index].visited)[0]}. I last saw **{players[index].name}** online <t:{round(players[index].last_online.timestamp())}:R>, and **{players[alt_index].name}** <t:{round(players[alt_index].last_online.timestamp())}:R>"
 
         # Page 3 - Town
         content += "newpage"
@@ -516,7 +507,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
                     f"Visited Towns comparison: {player_1.name} & {player_2.name}", 
                     "Player", 
                     "No. of towns", 
-                    plt.bar
+                    bar
                 )
             )
         )
@@ -530,7 +521,7 @@ class Compare(commands.GroupCog, name="compare", description="Compare statistics
 
         return [
             app_commands.Choice(name=p.name, value=p.name)
-            for p in interaction.client.client.get_tracking().players if current.lower().replace("_", " ") in p.name.lower() and values["player_first"].replace(" ", "_").lower() != p.name.lower()
+            for p in self.client.world.players if current.lower().replace("_", " ") in p.name.lower() and values["player_first"].replace(" ", "_").lower() != p.name.lower()
         ][:25]
     
 

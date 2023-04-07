@@ -9,8 +9,6 @@ import dynmap
 import setup as s
 from dynmap import errors as e
 
-import typing
-
 Choice = app_commands.Choice
 
 notification_settings = {
@@ -27,14 +25,16 @@ class Notifications(commands.GroupCog, name="notifications", description="Setup 
     @app_commands.command(name="enable", description="Enable notifications in a specific channel")
     @app_commands.choices(notification_type=[Choice(name=n.replace("_", " ").title(), value=n) for n in notification_settings.keys()])
     async def _enable(self, interaction : discord.Interaction, notification_type : str, channel : discord.TextChannel, nation : str):
-        world = self.client.cached_worlds["RulerEarth"]
+        world = self.client.world
         n = world.get_nation(nation.replace(" ", "_"), case_sensitive=False)
 
         if not n:
             raise e.MildError("Nation does not exist!")
 
-        with open("rulercraft/config.json") as f:
-            global_config = json.load(f)
+        try:
+            with open("rulercraft/config.json") as f: global_config = json.load(f)   
+        except IOError:
+            global_config = {}
         
         if "notifications" not in global_config:
             global_config["notifications"] = {}
@@ -51,14 +51,16 @@ class Notifications(commands.GroupCog, name="notifications", description="Setup 
         except:
             return await interaction.response.send_message(discord.Embed(title="Partially enabled", description="Enabled in this channel, however I don't seem to have access to send messages. Please give me access to send messages there!"))
         embed=discord.Embed(title="Successfully enabled", description=f"Successfully enabled notifications in {channel.mention}", color=s.embedSuccess)
-        embed.set_footer(text="Notifications refresh every 20 seconds")
+        embed.set_footer(text=f"Notifications refresh every {s.REFRESH_INTERVAL} seconds")
         
         await interaction.response.send_message(embed=embed)
         
     @app_commands.command(name="disable", description="Disable notifications in a specific channel")
     async def _disable(self, interaction : discord.Interaction, channel : discord.TextChannel):
-        with open("rulercraft/config.json") as f:
-            global_config = json.load(f)
+        try:
+            with open("rulercraft/config.json") as f: global_config = json.load(f)   
+        except IOError:
+            global_config = {}
         
         if "notifications" not in global_config or str(channel.id) not in global_config["notifications"]:
             raise e.MildError("This channel does not have notifications set up! Use `/notifications enable` to enable them.")
@@ -119,8 +121,10 @@ class Notifications(commands.GroupCog, name="notifications", description="Setup 
         enable_setting : str = None,
         disable_setting : str = None
     ):
-        with open("rulercraft/config.json") as f:
-            global_config = json.load(f)
+        try:
+            with open("rulercraft/config.json") as f: global_config = json.load(f)   
+        except IOError:
+            global_config = {}
 
         if "notifications" not in global_config or str(channel.id) not in global_config["notifications"]:
             return await interaction.response.send_message("This channel does not have notifications set up! Use `/notifications enable` to enable them.")
@@ -129,7 +133,7 @@ class Notifications(commands.GroupCog, name="notifications", description="Setup 
         changed = False
         
         if nation:
-            world = self.client.cached_worlds["RulerEarth"]
+            world = self.client.world
             n = world.get_nation(nation.replace(" ", "_"), case_sensitive=False)
 
             if not n:
@@ -174,22 +178,24 @@ class Notifications(commands.GroupCog, name="notifications", description="Setup 
     async def _nation_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
             app_commands.Choice(name=m.name_formatted, value=m.name_formatted)
-            for m in self.client.cached_worlds["RulerEarth"].nations if current.lower().replace("_", " ") in m.name_formatted.lower()
+            for m in self.client.world.nations if current.lower().replace("_", " ") in m.name_formatted.lower()
         ][:25]
     
     @_config_set.autocomplete("nation")
     async def _nation_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
             app_commands.Choice(name=m.name_formatted, value=m.name_formatted)
-            for m in self.client.cached_worlds["RulerEarth"].nations if current.lower().replace("_", " ") in m.name_formatted.lower()
+            for m in self.client.world.nations if current.lower().replace("_", " ") in m.name_formatted.lower()
         ][:25]
     
     @_config_set.autocomplete("enable_setting")
     async def _enable_setting_autocomplete(self, interaction : discord.Interaction, current : str):
         channel = interaction.client.get_channel(interaction.namespace.__dict__["channel"].id)
 
-        with open("rulercraft/config.json") as f:
-            global_config = json.load(f)
+        try:
+            with open("rulercraft/config.json") as f: global_config = json.load(f)   
+        except IOError:
+            global_config = {}
         
         config = global_config["notifications"][str(channel.id)] if "notifications" in global_config and str(channel.id) in global_config["notifications"] else {}
         if config == {}:

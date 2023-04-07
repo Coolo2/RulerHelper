@@ -3,15 +3,18 @@ import io
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.style as mplstyle
+
+matplotlib.use('Agg') 
+mplstyle.use('fast')
 
 from itertools import islice
 
 from dynmap import world
 from shapely.geometry import Point, Polygon
 
-from dynmap.tracking import Tracking, TrackPlayer
-
 import typing
+import setup as s
 
 from matplotlib.ticker import MaxNLocator
 
@@ -54,14 +57,14 @@ def save_graph(data : dict, title : str, x : str, y : str, chartType, highlight 
         barlist[highlight].set_color('r')
 
     buf = io.BytesIO()
-    plt.savefig(buf, dpi=300, transparent=True)
+    plt.savefig(buf, dpi=(s.IMAGE_DPI/5)*3, transparent=True)
     buf.seek(0)
 
     plt.close()
 
     return buf
 
-def plot_world(world : world.World, plot_players = False, tracking : Tracking = None, player_list : typing.List[TrackPlayer] = None, dot_size : int =None, plot_towns = True):
+def plot_world(world : world.World, plot_players = False, player_list : typing.List[world.Player] = None, dot_size : int =None, plot_towns = True):
 
     xw = 36865
     yw = 18432
@@ -91,7 +94,7 @@ def plot_world(world : world.World, plot_players = False, tracking : Tracking = 
                 points = [(p[0], p[1]) for p in point_polygon]
 
                 poly = Polygon(points)
-                plt.plot(*poly.exterior.xy, linewidth=0.3, color=town.border_color, zorder=3)
+                plt.plot(*poly.exterior.xy, linewidth=0.3, color=town.border_color, zorder=3, rasterized=True)
     
     if plot_players:
         x_online = []
@@ -100,15 +103,15 @@ def plot_world(world : world.World, plot_players = False, tracking : Tracking = 
         x_offline = []
         z_offline = []
 
-        playerlist = tracking.players if tracking else player_list
+        playerlist = player_list or world.players
 
         for player in playerlist:
-            if player.name in [p.name for p in world.players]:
-                x_online.append(player.last_x)
-                z_online.append(player.last_z)
+            if player.online:
+                x_online.append(player.x)
+                z_online.append(player.z)
             else:
-                x_offline.append(player.last_x)
-                z_offline.append(player.last_z)
+                x_offline.append(player.x)
+                z_offline.append(player.z)
     
         
         plt.scatter(x_online, z_online, color="white", s=dot_size or 10, zorder=5)
@@ -125,7 +128,7 @@ def plot_world(world : world.World, plot_players = False, tracking : Tracking = 
     plt.ylim([yw, 0-yw])
 
     buf = io.BytesIO()
-    plt.savefig(buf, dpi=500, transparent=True)
+    plt.savefig(buf, dpi=s.IMAGE_DPI, transparent=True)
     buf.seek(0)
 
     plt.close()
@@ -160,7 +163,7 @@ def plot_towns(towns : typing.List[world.Town], outposts=True, show_earth=False,
             if not outposts and not poly.contains(Point(town.x, town.z)):
                 continue
 
-            plt.plot(*poly.exterior.xy, linewidth=0.5, color=town.border_color, zorder=3)
+            plt.plot(*poly.exterior.xy, linewidth=0.5, color=town.border_color, zorder=3, rasterized=True)
 
             xs, ys = poly.exterior.xy    
             plt.fill(xs, ys, alpha=0.2, fc=town.fill_color, ec='none')
@@ -193,7 +196,7 @@ def plot_towns(towns : typing.List[world.Town], outposts=True, show_earth=False,
     plt.axis('off')
 
     buf = io.BytesIO()
-    plt.savefig(buf, dpi=500, bbox_inches='tight', transparent=True)
+    plt.savefig(buf, dpi=s.IMAGE_DPI, bbox_inches='tight', transparent=True)
     buf.seek(0)
 
     plt.close()

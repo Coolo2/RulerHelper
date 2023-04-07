@@ -12,7 +12,7 @@ from funcs.components import paginator
 from funcs import graphs, functions
 import setup as s
 
-import matplotlib.pyplot as plt
+from matplotlib.pyplot import bar
 
 class Top(commands.Cog):
 
@@ -33,19 +33,15 @@ class Top(commands.Cog):
     async def _towns_activity(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        tracking = self.client.get_tracking()
-
-        tracking.towns = list(sorted(tracking.towns, key=lambda x:x.total_activity, reverse=True))
+        await interaction.response.defer()
+        self.client.world.towns = list(sorted(self.client.world.towns, key=lambda x:x.total_activity, reverse=True))
 
         description_string = ""
         plottable = {}
-        for i, town in enumerate(tracking.towns):
-            if not town.town:
-                continue
+        for i, town in enumerate(self.client.world.towns):
             
-            plottable[town.town.name_formatted] = town.total_activity / 60
-            description_string += f"{i+1}. {town.town.name_formatted}: `{functions.generate_time(town.total_activity)}` ({(town.total_activity/tracking.total_tracked_seconds)*100:,.1f}%)\n"
+            plottable[town.name_formatted] = town.total_activity / 60
+            description_string += f"{i+1}. {town.name_formatted}: `{functions.generate_time(town.total_activity)}` ({(town.total_activity/self.client.world.total_tracked)*100:,.1f}%)\n"
 
         plottable = dict(graphs.take(25, plottable.items()))
 
@@ -59,35 +55,34 @@ class Top(commands.Cog):
             "Top towns (by online time)", 
             "Town Name", 
             "Minues Online", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="towns_graph.png")
     
-        embed = discord.Embed(title=f"Towns ({len(tracking.towns)})", color=s.embed)
+        embed = discord.Embed(title=f"Towns ({len(self.client.world.towns)})", color=s.embed)
         embed.set_image(url="attachment://towns_graph.png")
-        embed.set_footer(text=f"*Server tracking started {int(tracking.total_tracked_seconds/3600/24)} days ago.")
+        embed.set_footer(text=f"*Server tracking started {int(self.client.world.total_tracked/3600/24)} days ago.")
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
     @_towns_activity.autocomplete("highlight")
     async def _towns_activity_autocomplete(self, interaction : discord.Interaction, current : str):
-        tracking = self.client.get_tracking()
-        tracking.towns = list(sorted(tracking.towns, key=lambda x:x.total_activity, reverse=True))
+        self.client.world.towns = list(sorted(self.client.world.towns, key=lambda x:x.total_activity, reverse=True))
 
         return [
-            app_commands.Choice(name=t.town.name_formatted, value=t.town.name_formatted)
-            for t in tracking.towns[:25] if t.town and current.lower().replace("_", " ") in t.town.name_formatted.lower()
+            app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
+            for t in self.client.world.towns[:25] if current.lower().replace("_", " ") in t.name_formatted.lower()
         ][:25]
     
     @top_towns.command(name="age", description="Towns listed by age (total age)")
     async def _towns_age(self, interaction : discord.Interaction, reverse : bool = None, highlight : str = None):
 
         #print_here
-
-        world = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world = self.client.world
         world.towns = list(sorted(world.towns, key=lambda x:x.age, reverse=True if not reverse else False))
 
         description_string = ""
@@ -108,7 +103,7 @@ class Top(commands.Cog):
             "Top towns (by age)", 
             "Town Name", 
             "Age (days)", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="towns_graph.png")
@@ -118,11 +113,11 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
     @_towns_age.autocomplete("highlight")
     async def _towns_age_highlight(self, interaction : discord.Interaction, current : str):
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world : dynmap_w.World = self.client.world
         world.towns = list(sorted(world.towns, key=lambda x:x.age, reverse=True))
 
         return [
@@ -134,8 +129,8 @@ class Top(commands.Cog):
     async def _towns_residents(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.towns = list(sorted(world.towns, key=lambda x:x.total_residents, reverse=True))
 
         total_residents = world.total_residents
@@ -158,7 +153,7 @@ class Top(commands.Cog):
             "Top towns (by total residents)", 
             "Town Name", 
             "Residents", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="towns_graph.png")
@@ -168,12 +163,12 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
 
     @_towns_residents.autocomplete("highlight")
     async def towns_residents_autocomplete(self, interaction : discord.Interaction, current : str):
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world : dynmap_w.World = self.client.world
 
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
@@ -184,8 +179,8 @@ class Top(commands.Cog):
     async def _towns_area(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.towns = list(sorted(world.towns, key=lambda x:x.area_km, reverse=True))
 
         description_string = ""
@@ -208,7 +203,7 @@ class Top(commands.Cog):
             "Top towns (by total claimed area)", 
             "Town Name", 
             "Claimed Area (plots)", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="towns_graph.png")
@@ -218,12 +213,12 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
 
     @_towns_area.autocomplete("highlight")
     async def towns_area_autocomplete(self, interaction : discord.Interaction, current : str):
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world : dynmap_w.World = self.client.world
 
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
@@ -236,8 +231,8 @@ class Top(commands.Cog):
     async def _nations_residents(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.nations = list(sorted(world.nations, key=lambda x:x.total_residents, reverse=True))
 
         description_string = ""
@@ -258,7 +253,7 @@ class Top(commands.Cog):
             "Top nations (by total residents)", 
             "Nation Name", 
             "Residents", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="nations_graph.png")
@@ -268,14 +263,14 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
     @top_towns.command(name="balance", description="Towns ordered by bank balance")
     async def _towns_balance(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.towns = list(sorted(world.towns, key=lambda x:x.bank, reverse=True))
 
         total_balance = world.total_town_bank
@@ -298,7 +293,7 @@ class Top(commands.Cog):
             "Top towns (by bank balance)", 
             "Town Name", 
             "Bank Balance", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="towns_graph.png")
@@ -308,12 +303,12 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
 
     @_towns_residents.autocomplete("highlight")
     async def towns_balance(self, interaction : discord.Interaction, current : str):
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        world : dynmap_w.World = self.client.world
 
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
@@ -323,7 +318,7 @@ class Top(commands.Cog):
 
     @_nations_residents.autocomplete("highlight")
     async def nations_residents_autocomplete_nation(self, interaction : discord.Interaction, current : str):
-        world = self.client.cached_worlds["RulerEarth"]
+        world = self.client.world
 
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
@@ -337,22 +332,20 @@ class Top(commands.Cog):
 
         await interaction.response.defer()
 
-        tracking = self.client.get_tracking()
-
-        tracking.players = list(sorted(tracking.players, key = lambda x: x.total_online_seconds, reverse=True))
+        self.client.world.players = list(sorted(self.client.world.players, key = lambda x: x.total_online, reverse=True))
 
         description_string = ""
-        for i, player in enumerate(tracking.players):
+        for i, player in enumerate(self.client.world.players):
             bold = ""
-            if player.last_seen_timestamp + 30 >= datetime.datetime.now().timestamp():
+            if player.last_online + datetime.timedelta(seconds=s.REFRESH_INTERVAL+10) >= datetime.datetime.now():
                 bold = "**"
 
-            percent = (player.total_online_seconds / player.tracking.total_tracked_seconds) * 100
-            description_string += f"{i+1}. {bold}{player.name}{bold}: `{functions.generate_time(player.total_online_seconds)}` <t:{round(player.last_seen_timestamp)}:R> ({percent:,.1f}%)\n"
+            percent = (player.total_online / self.client.world.total_tracked) * 100
+            description_string += f"{i+1}. {bold}{discord.utils.escape_markdown(player.name)}{bold}: `{functions.generate_time(player.total_online)}` <t:{round(player.last_online.timestamp())}:R> ({percent:,.1f}%)\n"
 
         plottable = {}
-        for player in tracking.players:
-            plottable[player.name] = player.total_online_seconds / 60
+        for player in self.client.world.players:
+            plottable[player.name] = player.total_online / 60
         plottable = dict(graphs.take(25, plottable.items()))
 
         if highlight and highlight in list(plottable.keys()):
@@ -365,12 +358,12 @@ class Top(commands.Cog):
             "Top players (by time in world)", 
             "Player", 
             "Minutes on earth", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="players_graph.png")
     
-        embed = discord.Embed(title=f"Players ({len(tracking.players)})", color=s.embed)
+        embed = discord.Embed(title=f"Players ({len(self.client.world.players)})", color=s.embed)
         embed.set_image(url="attachment://players_graph.png")
 
         view = paginator.PaginatorView(embed, description_string)
@@ -379,20 +372,19 @@ class Top(commands.Cog):
     
     @_players_activity.autocomplete("highlight")
     async def _top_players_highlight(self, interaction : discord.Interaction, current : str):
-        tracking = self.client.get_tracking()
-        tracking.players = list(sorted(tracking.players, key = lambda x: x.total_online_seconds, reverse=True))
+        self.client.world.players = list(sorted(self.client.world.players, key = lambda x: x.total_online, reverse=True))
 
         return [
             app_commands.Choice(name=t.name, value=t.name)
-            for t in tracking.players[:25] if current.lower() in t.name.lower()
+            for t in self.client.world.players[:25] if current.lower() in t.name.lower()
         ][:25]
     
     @top_nations.command(name="area", description="Nations ordered by total claimed area")
     async def _nations_area(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.nations = list(sorted(world.nations, key=lambda x:x.area_km, reverse=True))
 
         description_string = ""
@@ -415,7 +407,7 @@ class Top(commands.Cog):
             "Top nations (by claimed area)", 
             "Nation Name", 
             "Claimed Area (plots)", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="nations_graph.png")
@@ -425,12 +417,12 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
 
     @_nations_area.autocomplete("highlight")
     async def nations_area_autocomplete_nation(self, interaction : discord.Interaction, current : str):
-        world = self.client.cached_worlds["RulerEarth"]
+        world = self.client.world
 
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
@@ -441,14 +433,13 @@ class Top(commands.Cog):
     async def _nations_towns(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.nations = list(sorted(world.nations, key=lambda x:len(x.towns), reverse=True))
 
         description_string = ""
         plottable = {}
         for i, nation in enumerate(world.nations):
-            nation_area = nation.area_km
             plottable[nation.name_formatted] = len(nation.towns)
             description_string += f"{i+1}. {nation.name_formatted}: `{len(nation.towns)} towns` ({(len(nation.towns)/len(world.towns))*100:,.2f}%)\n"
 
@@ -464,7 +455,7 @@ class Top(commands.Cog):
             "Top nations (by total towns)", 
             "Nation Name", 
             "Town Total", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="nations_graph.png")
@@ -474,12 +465,12 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
     
 
     @_nations_towns.autocomplete("highlight")
     async def nations_towns_highlight_nation(self, interaction : discord.Interaction, current : str):
-        world = self.client.cached_worlds["RulerEarth"]
+        world = self.client.world
 
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
@@ -493,18 +484,16 @@ class Top(commands.Cog):
 
         await interaction.response.defer()
 
-        tracking = self.client.get_tracking()
-
-        tracking.players = list(sorted(tracking.players, key = lambda x: len(x.visited), reverse=True))
+        self.client.world.players = list(sorted(self.client.world.players, key = lambda x: len(x.visited), reverse=True))
 
         description_string = ""
-        for i, player in enumerate(tracking.players):
+        for i, player in enumerate(self.client.world.players):
 
-            percent = (len(player.visited) / len(tracking.towns)) * 100
-            description_string += f"{i+1}. {player.name}: `{len(player.visited)}` ({percent:,.1f}%)\n"
+            percent = (len(player.visited) / len(self.client.world.towns)) * 100
+            description_string += f"{i+1}. {discord.utils.escape_markdown(player.name)}: `{len(player.visited)}` ({percent:,.1f}%)\n"
 
         plottable = {}
-        for player in tracking.players:
+        for player in self.client.world.players:
             plottable[player.name] = len(player.visited)
         plottable = dict(graphs.take(25, plottable.items()))
 
@@ -518,12 +507,12 @@ class Top(commands.Cog):
             "Top players (by visited town count)", 
             "Player", 
             "Town count", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="players_graph.png")
     
-        embed = discord.Embed(title=f"Players ({len(tracking.players)})", color=s.embed)
+        embed = discord.Embed(title=f"Players ({len(self.client.world.players)})", color=s.embed)
         embed.set_image(url="attachment://players_graph.png")
 
         view = paginator.PaginatorView(embed, description_string)
@@ -532,12 +521,11 @@ class Top(commands.Cog):
     
     @_players_activity.autocomplete("highlight")
     async def _top_players_highlight(self, interaction : discord.Interaction, current : str):
-        tracking = self.client.get_tracking()
-        tracking.players = list(sorted(tracking.players, key = lambda x: x.total_online_seconds, reverse=True))
+        self.client.world.players = list(sorted(self.client.world.players, key = lambda x: x.total_online, reverse=True))
 
         return [
             app_commands.Choice(name=t.name, value=t.name)
-            for t in tracking.players[:25] if current.lower() in t.name.lower()
+            for t in self.client.world.players[:25] if current.lower() in t.name.lower()
         ][:25]
     
     # Cultures
@@ -546,8 +534,8 @@ class Top(commands.Cog):
     async def _cultures_residents(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.cultures = list(sorted(world.cultures, key=lambda x:x.total_residents, reverse=True))
 
         description_string = ""
@@ -568,7 +556,7 @@ class Top(commands.Cog):
             "Top cultures (by total residents)", 
             "Culture Name", 
             "Residents", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="cultures_graph.png")
@@ -578,11 +566,11 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
 
     @_cultures_residents.autocomplete("highlight")
     async def cultures_residents_autocomplete_culture(self, interaction : discord.Interaction, current : str):
-        world = self.client.cached_worlds["RulerEarth"]
+        world = self.client.world
 
         return [
             app_commands.Choice(name=c.name, value=c.name)
@@ -593,8 +581,8 @@ class Top(commands.Cog):
     async def _cultures_towns(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.cultures = list(sorted(world.cultures, key=lambda x:len(x.towns), reverse=True))
 
         description_string = ""
@@ -615,7 +603,7 @@ class Top(commands.Cog):
             "Top cultures (by town count)", 
             "Culture Name", 
             "Towns", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="cultures_graph.png")
@@ -625,11 +613,11 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
 
     @_cultures_towns.autocomplete("highlight")
     async def cultures_towns_autocomplete_culture(self, interaction : discord.Interaction, current : str):
-        world = self.client.cached_worlds["RulerEarth"]
+        world = self.client.world
 
         return [
             app_commands.Choice(name=c.name, value=c.name)
@@ -642,8 +630,8 @@ class Top(commands.Cog):
     async def _religions_residents(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.religions = list(sorted(world.religions, key=lambda x:x.total_followers, reverse=True))
 
         description_string = ""
@@ -664,7 +652,7 @@ class Top(commands.Cog):
             "Top religions (by total followers)", 
             "Religion Name", 
             "Followers", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         
@@ -675,11 +663,11 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
 
     @_religions_residents.autocomplete("highlight")
     async def religions_residents_autocomplete_religion(self, interaction : discord.Interaction, current : str):
-        world = self.client.cached_worlds["RulerEarth"]
+        world = self.client.world
 
         return [
             app_commands.Choice(name=r.name, value=r.name)
@@ -690,8 +678,8 @@ class Top(commands.Cog):
     async def _religions_towns(self, interaction : discord.Interaction, highlight : str = None):
 
         #print_here
-
-        world : dynmap_w.World = self.client.cached_worlds["RulerEarth"]
+        await interaction.response.defer()
+        world : dynmap_w.World = self.client.world
         world.religions = list(sorted(world.religions, key=lambda x:len(x.towns), reverse=True))
 
         description_string = ""
@@ -712,7 +700,7 @@ class Top(commands.Cog):
             "Top religions (by town count)", 
             "Religion Name", 
             "Towns", 
-            plt.bar,
+            bar,
             highlight=highlight
         )
         graph = discord.File(file_name, filename="religions_graph.png")
@@ -722,11 +710,11 @@ class Top(commands.Cog):
 
         view = paginator.PaginatorView(embed, description_string)
 
-        await interaction.response.send_message(embed=view.embed, view=view, file=graph)
+        await interaction.followup.send(embed=view.embed, view=view, file=graph)
 
     @_religions_towns.autocomplete("highlight")
     async def religions_towns_highlight(self, interaction : discord.Interaction, current : str):
-        world = self.client.cached_worlds["RulerEarth"]
+        world = self.client.world
 
         return [
             app_commands.Choice(name=r.name, value=r.name)

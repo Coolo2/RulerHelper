@@ -26,10 +26,9 @@ class Poll(commands.GroupCog, name="poll", description="All poll commands"):
 
         await interaction.response.send_message(embed=embed)
 
-        msg = await interaction.original_message()
-
-        await msg.add_reaction("✅")
-        await msg.add_reaction("<:cross:952490666192162826>")
+        message = await interaction.original_response()
+        await message.add_reaction("✅")
+        await message.add_reaction("<:cross:952490666192162826>")
     
     @app_commands.command(name='question', description="Create a multiple choice question")
     async def question(
@@ -65,11 +64,10 @@ class Poll(commands.GroupCog, name="poll", description="All poll commands"):
 
                 
         await interaction.response.send_message(embed=embed)
-
-        msg = await interaction.original_message()
         
+        message = await interaction.original_response()
         for i in range(len(choices)):
-            await msg.add_reaction(emojis[i])
+            await message.add_reaction(emojis[i])
 
 async def setup(bot : commands.Bot):
     await bot.add_cog(Poll(bot, bot.client))

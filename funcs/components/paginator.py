@@ -1,4 +1,4 @@
-import enum
+
 import discord
 import typing
 

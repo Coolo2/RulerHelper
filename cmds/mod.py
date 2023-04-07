@@ -6,14 +6,16 @@ from discord.ext import commands
 
 import dynmap
 from dynmap import errors as e
+from dynmap import world as w
 
 import setup as s
 
 import pickle
+import aiofiles
 
 class AcceptView(discord.ui.View):
 
-    def __init__(self, client : dynmap.Client, accept_type, player : str, town : str = None, discord_id : str = None):
+    def __init__(self, client : dynmap.Client, accept_type, player : w.Player, town : w.Town = None, discord_id : str = None):
 
         self.client = client
 
@@ -22,9 +24,11 @@ class AcceptView(discord.ui.View):
         self.town = town 
         self.discord_id = discord_id 
 
-        self.timeout = None
+        
 
         super().__init__()
+
+        self.timeout = None
     
     @discord.ui.button(style=discord.ButtonStyle.green, label="Accept")
     async def _accept_button(self, interaction : discord.Interaction, button : discord.ui.Button):
@@ -32,61 +36,33 @@ class AcceptView(discord.ui.View):
 
         if interaction.user.id not in s.mods:
             raise e.MildError("You are not a Bot Moderator!")
-
-        tracking = self.client.get_tracking()
-        tracking_player = tracking.get_player(self.player)
         
-        if not tracking_player:
-            raise e.MildError("Player not found! They have to have joined the server recently to be added.")
-        
-        if self.town != None:
-            tracking_town = tracking.get_town(self.town.replace(" ", "_"), case_sensitive=False)
-            if not tracking_town:
-                raise e.MildError("Town does not exist.")
 
         if self.accept_type == "likely_residency":
-            with open("rulercraft/server_data.pickle", "rb") as f:
-                try:
-                    server = pickle.load(f)
-                except EOFError:
-                    server = {}
-
-            if tracking_player.name not in server["players"]:
-                server["players"][tracking_player.name] = {}
             
             if self.town:
-                server["players"][tracking_player.name]["likely_residency"] = tracking_town.town.name
+                self.player.likely_residency_set = self.town.name
             else:
-                if "likely_residency" in server["players"][tracking_player.name]:
-                    del server["players"][tracking_player.name]["likely_residency"]
+                self.player.likely_residency_set = None
             
-            with open("rulercraft/server_data.pickle", "wb") as f:
-                pickle.dump(server, f)
+            async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
+                await f.write(pickle.dumps(self.client.world))
             
             button.disabled = True
             
-            await interaction.response.edit_message(content=f"Accepted likely residency change! **{tracking_player.name}**'s likely residency is now **{self.town}**", view=self)
+            await interaction.response.edit_message(content=f"Accepted likely residency change! **{self.player.name}**'s likely residency is now **{self.town.name_formatted}**", view=self)
 
             
         else:
-
-            with open("rulercraft/server_data.pickle", "rb") as f:
-                try:
-                    server = pickle.load(f)
-                except EOFError:
-                    server = {}
-
-            if tracking_player.name not in server["players"]:
-                server["players"][tracking_player.name] = {}
             
-            server["players"][tracking_player.name]["discord_id"] = self.discord_id
+            self.player.discord_id_set = self.discord_id
             
-            with open("rulercraft/server_data.pickle", "wb") as f:
-                pickle.dump(server, f)
+            async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
+                await f.write(pickle.dumps(self.client.world))
             
             button.disabled = True
             
-            return await interaction.response.edit_message(content=f"Linked discord! <@{self.discord_id}> is now linked to **{tracking_player.name}**", view=self)
+            return await interaction.response.edit_message(content=f"Linked discord! <@{self.discord_id}> is now linked to **{self.player.name}**", view=self)
 
 
 
@@ -107,46 +83,44 @@ class Request(commands.GroupCog, name="request", description="Request something 
         if town == "None":
             town = None 
 
-        tracking = self.client.get_tracking()
-        tracking_player = tracking.get_player(player)
+        player : w.Player = self.client.world.get_player(player, case_sensitive=False)
 
         if town:
-            tracking_town = tracking.get_town(town.replace(" ", "_"), case_sensitive=False)
-            if not tracking_town:
+            town : w.Town = self.client.world.get_town(town.replace(" ", "_"), case_sensitive=False)
+            if not town:
                 raise e.MildError("Town does not exist.")
         
-
-        if not tracking_player:
+        if not player:
             raise e.MildError("Player not found! They have to have joined the server recently to be added.")
         
-        channel : discord.TextChannel = self.bot.get_guild(985589916794765332).get_channel(985590035556479017)
+        channel : discord.TextChannel = self.bot.get_channel(s.mod_notification_channel)
 
         view = AcceptView(self.client, "likely_residency", player, town)
 
         await channel.send(
-            f"/mod set likely_residency {player} {tracking_town.town.name if town else ''}",
+            f"/mod set likely_residency {player.name} {town.name if town else ''}",
             embed=discord.Embed(
                 title="Likely residency change request", 
-                description=f"{interaction.user.mention} has requested for **{player}** likely residency to be set to **{town}**",
+                description=f"{interaction.user.mention} has requested for **{player.name}** likely residency to be set to **{town.name_formatted}**",
                 color=s.embed
             ),
             view=view
         )
 
-        await interaction.response.send_message("Request sent! DM <@368071242189897728> to get more info")
+        await interaction.response.send_message(f"Request sent! DM <@{s.mods[0]}> to get more info")
 
     @_request_likely_residency_change.autocomplete("town")
     async def _residents_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
-            for t in self.client.cached_worlds["RulerEarth"].towns if current.lower().replace("_", " ") in t.name_formatted.lower()
+            for t in self.client.world.towns if current.lower().replace("_", " ") in t.name_formatted.lower()
         ][:24] + [app_commands.Choice(name="None", value="None")]
     
     @_request_likely_residency_change.autocomplete("player")
     async def _player_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
             app_commands.Choice(name=p.name, value=p.name)
-            for p in self.client.get_tracking().players if current.lower() in p.name.lower()
+            for p in self.client.world.players if current.lower() in p.name.lower()
         ][:25]
     
     @app_commands.command(name="discord_link", description="Link Discord and MC name. Allows people to search for your discord name")
@@ -154,13 +128,13 @@ class Request(commands.GroupCog, name="request", description="Request something 
 
         #print_here
 
-        tracking_player = self.client.get_tracking().get_player(minecraft_name)
-        if not tracking_player:
+        player = self.client.world.get_player(minecraft_name)
+        if not player:
             raise e.MildError("Player not found! They have to have joined the server recently to be added.")
         
-        channel : discord.TextChannel = self.bot.get_guild(985589916794765332).get_channel(985590035556479017)
+        channel : discord.TextChannel = self.bot.get_channel(s.mod_notification_channel)
 
-        view = AcceptView(self.client, "discord", minecraft_name, discord_id=str(interaction.user.id))
+        view = AcceptView(self.client, "discord", player, discord_id=str(interaction.user.id))
 
         await channel.send(
             f"/mod set discord {minecraft_name} {interaction.user.id}",
@@ -172,13 +146,13 @@ class Request(commands.GroupCog, name="request", description="Request something 
             view=view
         )
 
-        await interaction.response.send_message("Request sent! DM <@368071242189897728> to get more info")
+        await interaction.response.send_message(f"Request sent! DM <@{s.mods[0]}> to get more info")
     
     @_request_discord_link.autocomplete("minecraft_name")
     async def _minecraft_name_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
             app_commands.Choice(name=p.name, value=p.name)
-            for p in self.client.get_tracking().players if current.lower() in p.name.lower()
+            for p in self.client.world.players if current.lower() in p.name.lower()
         ][:25]
     
 # Fix None for likely_residency
@@ -201,39 +175,28 @@ class Mod(commands.Cog):
         if interaction.user.id not in s.mods:
             raise e.MildError("You are not a Bot Moderator!")
         
-        tracking = self.client.get_tracking()
-        tracking_player = tracking.get_player(player)
+        player : w.Player = self.client.world.get_player(player)
 
         if town != None:
-            tracking_town = tracking.get_town(town.replace(" ", "_"), case_sensitive=False)
-            if not tracking_town:
+            town : w.Town = self.client.world.get_town(town.replace(" ", "_"), case_sensitive=False)
+            if not town:
                 raise e.MildError("Town does not exist.")
 
-        if not tracking_player:
+        if not player:
             raise e.MildError("Player not found! They have to have joined the server recently to be added.")
-        
-        with open("rulercraft/server_data.pickle", "rb") as f:
-            try:
-                server = pickle.load(f)
-            except EOFError:
-                server = {}
 
-        if player not in server["players"]:
-            server["players"][player] = {}
-        
         if town:
-            server["players"][player]["likely_residency"] = tracking_town.town.name
+            player.likely_residency_set = town.name
         else:
-            if "likely_residency" in server["players"][player]:
-                del server["players"][player]["likely_residency"]
+            player.likely_residency_set = None
         
-        with open("rulercraft/server_data.pickle", "wb") as f:
-            pickle.dump(server, f)
+        async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
+            await f.write(pickle.dumps(self.client.world))
         
         return await interaction.response.send_message(
             embed=discord.Embed(
                 title="Successfully set likely residency",
-                description=f"Successfully set the likely residency for **{player}** to **{town}**.",
+                description=f"Successfully set the likely residency for **{player.name}** to **{town.name_formatted}**.",
                 color=s.embedSuccess
             )
         )
@@ -242,14 +205,14 @@ class Mod(commands.Cog):
     async def _residents_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
             app_commands.Choice(name=t.name_formatted, value=t.name_formatted)
-            for t in self.client.cached_worlds["RulerEarth"].towns if current.lower().replace("_", " ") in t.name_formatted.lower()
+            for t in self.client.world.towns if current.lower().replace("_", " ") in t.name_formatted.lower()
         ][:25]
     
     @_set_likely_residency.autocomplete("player")
     async def _player_autocomplete(self, interaction : discord.Interaction, current : str):
         return [
             app_commands.Choice(name=p.name, value=p.name)
-            for p in self.client.get_tracking().players if current.lower() in p.name.lower()
+            for p in self.client.world.players if current.lower() in p.name.lower()
         ][:25]
     
     @app_commands.default_permissions(administrator=True)
@@ -260,25 +223,18 @@ class Mod(commands.Cog):
         if interaction.user.id not in s.mods:
             raise e.MildError("You are not a Bot Moderator!")
 
-        tracking = self.client.get_tracking()
-        tracking_player = tracking.get_player(minecraft_name)
+        player = self.client.world.get_player(minecraft_name)
 
-        if not tracking_player:
+        if not player:
             raise e.MildError("Player not found! They have to have joined the server recently to be added.")
-        
-        with open("rulercraft/server_data.pickle", "rb") as f:
-            try:
-                server = pickle.load(f)
-            except EOFError:
-                server = {}
 
-        if minecraft_name not in server["players"]:
-            server["players"][minecraft_name] = {}
+        if discord_id == "none":
+            player.discord_id_set = None
+        else:
+            player.discord_id_set = discord_id
         
-        server["players"][minecraft_name]["discord_id"] = discord_id
-        
-        with open("rulercraft/server_data.pickle", "wb") as f:
-            pickle.dump(server, f)
+        async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
+            await f.write(pickle.dumps(self.client.world))
         
         return await interaction.response.send_message(
             embed=discord.Embed(
@@ -292,7 +248,7 @@ class Mod(commands.Cog):
     async def _minecraft_name(self, interaction : discord.Interaction, current : str):
         return [
             app_commands.Choice(name=p.name, value=p.name)
-            for p in self.client.get_tracking().players if current.lower() in p.name.lower()
+            for p in self.client.world.players if current.lower() in p.name.lower()
         ][:25]
 
 async def setup(bot : commands.Bot):

@@ -56,3 +56,41 @@ A discord bot for RulerCraft which shows many stats and allows you to interact w
 - /info
     - /info help - Help command, shows a command list
     - /info info - Bot info with some stats
+
+# Installing and running
+
+## Requirements
+
+- Modules in requirements.txt
+- Python 3.8+
+
+## Set-up
+
+- Create a file named `.env` with the following:
+```
+token="discord bot token"
+webhook="a webhook to send to when the bot is added to a new server. if left blank will cause a non-fatal error when bot is added to server"
+```
+- Open setup.py
+- Set refresh_commands to True
+- Add your Discord ID to mods
+- Ensure the bot profile has "server members intent" enabled on [discord developers](https://discord.com/developers)
+
+## Running
+
+- Run the `main.py` file to start the bot.
+- After first run, make sure to set refresh_commands to False in `setup.py`
+
+# Updating from previous version
+
+1. Stop the bot from running
+2. Delete the cmds, cogs, dynmap and funcs direcoty
+3. Install the cmds, cogs, dynmap and funcs directories from the new version
+4. Replace main.py with the new main.py
+5. Install task.py
+6. Copy in new variables of setup.py
+7. Rename server_data.pickle to old_data.pickle in rulercraft directory
+8. Delete all files with "backup" in the name in the rulercraft directory
+9. Ensure `MIGRATE_OLD_SAVEFILE` is set to True in setup.py
+10. Update requirements.txt, install missing if required
+10. Run the bot

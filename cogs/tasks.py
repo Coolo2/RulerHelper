@@ -1,43 +1,32 @@
 
-
 import pickle 
 import discord 
 from discord.ext import commands, tasks 
-from dynmap import client
 import datetime
 
-import asyncio
+import aiofiles
 import typing
 import json
+import asyncio
 
 import setup as s
-from dynmap import world as dynmap_w
+import dynmap
 
-nearby_players = {}
-prev_players = []
-
-def get_world_task_no_processing(bot : commands.Bot, client : client.Client):
-
-    @tasks.loop(seconds=20)
-    async def get_world():
-
-        await client.get_world("RulerEarth")
-    
-    return get_world
-
+counter = 0
 territory_enter_sent = {}
 
-async def notifications(bot : typing.Union[commands.Bot, discord.Client], client : client.Client):
-    with open("rulercraft/config.json") as f:
-        config = json.load(f)
+
+async def notifications(bot : typing.Union[commands.Bot, discord.Client], client : dynmap.Client):
+    try:
+        with open("rulercraft/config.json") as f: config = json.load(f)   
+    except IOError:
+        config = {}
     
-    world = client.cached_worlds["RulerEarth"]
 
     if "notifications" in config:
-        print("h")
         for channel_id_str, channel_settings in config["notifications"].items():
             channel = bot.get_channel(int(channel_id_str))
-            nation = world.get_nation(channel_settings["nation"])
+            nation = client.world.get_nation(channel_settings["nation"])
 
             if nation and channel:
                 players_in_nation : typing.List[str] = []
@@ -50,14 +39,14 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
 
                             if channel_id_str not in territory_enter_sent or player.name not in territory_enter_sent[channel_id_str]:
 
-                                tracking_player = client.get_tracking().get_player(player.name)
+                                player = client.world.get_player(player.name)
                                 likely_residency_nation = None
-                                if tracking_player:
-                                    _lr = tracking_player.get_likely_residency()
+                                if player:
+                                    _lr = player.likely_residency
 
-                                    if _lr.town:
-                                        likely_residency = _lr.town.name_formatted
-                                        likely_residency_nation = _lr.town.nation.name_formatted if _lr.town.nation else ""
+                                    if _lr:
+                                        likely_residency = _lr.name_formatted
+                                        likely_residency_nation = _lr.nation.name_formatted if _lr.nation else ""
                                     else:
                                         likely_residency = "Unknown"
                                 else:
@@ -76,7 +65,7 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
                                 embed.add_field(name="Coordinates", value=f"[{player.x:,d}, {player.y:,d}, {player.z:,d}]({client.url}?x={player.x}&z={player.z}&zoom=10)")
                                 embed.add_field(name="Town", value=player.current_town.name_formatted)
                                 embed.add_field(name="Likely residency", value=f"{likely_residency} ({likely_residency_nation if likely_residency_nation else 'Unknown'})" if likely_residency and likely_residency else "Unknown")
-                                embed.set_thumbnail(url=player.avatar)
+                                embed.set_thumbnail(url=client.url + player.avatar_path)
 
                                 await channel.send(embed=embed)
                 
@@ -91,173 +80,218 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
                     for player in players_to_remove:
                         del territory_enter_sent[channel_id_str][player]
 
-counter = 0
-potential_remove_towns : typing.Dict[str, int] = {}
+async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
+    global counter 
 
-def get_world_task(bot : commands.Bot, client_a : client.Client):
+    now = datetime.datetime.now()
 
-    async def task(bot : commands.Bot, client : client.Client):
-        global prev_players
-        global nearby_players
-        global counter 
-        global potential_remove_towns
+    if s.DEBUG_MODE: print("Getting")
+    data = await client.http.request("GET", path="/up/world/RulerEarth/0")
+    map_data = await client.http.request("GET", path="/tiles/_markers_/marker_RulerEarth.json")
+    if s.DEBUG_MODE: print("Got")
 
-        with open("rulercraft/server_data.pickle", "rb") as f:
-            try:
-                server = pickle.load(f)
-            except EOFError:
-                server = {}
+    world = await load_file()
+    
+    if s.DEBUG_MODE: print("1: " + str(datetime.datetime.now()))
+
+    if s.MIGRATE_OLD_SAVEFILE:
+        async with aiofiles.open("rulercraft/old_data.pickle", "rb") as f:
+            old_data = pickle.loads(await f.read())
+
+    
+    world.total_tracked += s.REFRESH_INTERVAL
+    world.last_refreshed = datetime.datetime.now()
+
+    world.is_stormy = data["hasStorm"]
+    world.is_thundering = data["isThundering"]
+    world.time = (datetime.datetime.combine(datetime.date(1,1,1),datetime.time(0, 0, 0)) + datetime.timedelta(hours=6) + datetime.timedelta(hours=data["servertime"]/1000)).time()
+    
+    online_players : typing.Dict[str, dict] = {}
+    for raw_player in data["players"]:
+        online_players[raw_player["account"]] = raw_player
+
+        if raw_player["account"] not in world.players:
+            p = dynmap.world.Player(world)
+            p.load_data(raw_player)
+
+            world.players.append(p)
         
-        print("1: " + str(datetime.datetime.now()))
+    
+    # Create offline players if no longer online
+    for player in world.players.copy():
+        if player.name in online_players:
+            player.online = True
+            player.load_data(online_players[player.name])
+        else:
+            player.online = False
+    
+    for town in world.towns:
+        town.points = []
+        
+    
 
-        if "total_tracked" not in server:
-            server["total_tracked"] = 90000
+    for area_name, area_data in map_data["sets"]["towny.markerset"]["areas"].items():
         
-        server["total_tracked"] += 20
-        server["last"] = datetime.datetime.now().timestamp()
-        
-        world : dynmap_w.World = await client.get_world("RulerEarth")
-        
+        if area_data["label"] not in world.towns:
+            town = dynmap.world.Town(world, area_data=area_data)
 
-        # Get total residents and check territory
-        in_territory_this_iteration = []
-            
+            world.towns.append(town)
+        else:
+            town = world.get_town(area_data["label"])
+
+        town.add_area_data(area_data)
+        town.last_updated = datetime.datetime.now()
+    
+    for marker_name, marker_data in map_data["sets"]["towny.markerset"]["markers"].items():
         for town in world.towns:
-            
-            if not town.bank:
-                continue
-            if "towns" not in server:
-                server["towns"] = {}
-            if town.name not in server["towns"]:
-                server["towns"][town.name] = {}
-            if "visited" not in server["towns"][town.name]:
-                server["towns"][town.name]["visited"] = {}
-            
-            server["towns"][town.name]["total_residents"] = town.total_residents
-
-            if "bank_history" not in server["towns"][town.name]:
-                server["towns"][town.name]["bank_history"] = {}
-            if "total_residents_history" not in server["towns"][town.name]:
-                server["towns"][town.name]["total_residents_history"] = {}
-            td = datetime.date.today()
-            server["towns"][town.name]["bank_history"][f"{td.year}, {td.month}, {td.day}"] = town.bank
-            server["towns"][town.name]["total_residents_history"][f"{td.year}, {td.month}, {td.day}"] = town.total_residents
-
-            for player in town.near_players:
-                
-                if player.name not in server["towns"][town.name]["visited"]:
-                    server["towns"][town.name]["visited"][player.name] = {"total":0, "last":0}
-                server["towns"][town.name]["visited"][player.name]["total"] += 20
-                server["towns"][town.name]["visited"][player.name]["last"] = datetime.datetime.now().timestamp()
-
-        for player in world.players:
-            for town_name in nearby_players:
-                if player.name not in in_territory_this_iteration and player.name in nearby_players[town_name]:
-                    del nearby_players[town_name][player.name]
-
-        if len(prev_players) > 0:
-            for player in world.players:
-
-                # Check user joins and leaves
-                nearby_town = player.current_town
-                nearby_town = nearby_town.name if nearby_town else "Unknown"
-
-                if "players" not in server:
-                    server["players"] = {}
-                if player.name not in server["players"]:
-                    server["players"][player.name] = {}
-                if "activity" not in server["players"][player.name]:
-                    server["players"][player.name]["activity"] = {"total":0, "last":0}
-                server["players"][player.name]["activity"]["total"] += 20
-                server["players"][player.name]["activity"]["last"] = datetime.datetime.now().timestamp()
-
-                server["players"][player.name]["coordinates"] = {"x":player.x, "y":player.y, "z":player.z, "town":nearby_town}
+            if town.name == marker_data["label"]:
+                town.x = round(marker_data["x"])
+                town.y = round(marker_data["y"])
+                town.z = round(marker_data["z"])
+                town.icon = marker_data["icon"]
         
-        # Remove inactive players and towns and old history data
-        remove_players = []
-        for name, pl in server["players"].items():
-            last = datetime.datetime.fromtimestamp(pl["activity"]["last"])
-            if datetime.datetime.now() - last > datetime.timedelta(days=45):
-                remove_players.append(name)
-        for player_name in remove_players:
-            del server["players"][player_name]
-        
-        if counter % 10 == 0:
-            # Run every 10 iterations
-            towns = [t.name for t in world.towns]
-            for town_name in server["towns"].keys():
-                if town_name not in towns:
-                    if town_name not in potential_remove_towns or not potential_remove_towns[town_name]:
-                        potential_remove_towns[town_name] = 0
-                    
-                    potential_remove_towns[town_name] += 1
-            
-            for town_name in potential_remove_towns:
-                if town_name in towns:
-                    potential_remove_towns[town_name] = 0
+    for town in world.towns:
+        if town.culture and town.culture not in world.cultures:
+            world.cultures.append(town.culture)
+        if town.religion and town.religion not in world.religions:
+            world.religions.append(town.religion)
+        if town.nation and town.nation not in world.nations:
+            world.nations.append(town.nation)
 
-            for town_name, number in potential_remove_towns.items():
-                if number and number >= 3 :
-                    
-                    del server["towns"][town_name]
-                    potential_remove_towns[town_name] = None
-
-                    await bot.get_channel(985596858992853122).send(f"removed town {town_name}")
-
-        for name, town in server["towns"].items():
-            town_remove_players : typing.List[str] = []
-
-            for player_name, player_data in town["visited"].items():
-                if player_name not in server["players"]:
-                    town_remove_players.append(player_name)
-            
-            for player_name in town_remove_players:
-                del town["visited"][player_name]
-
-            if len(town["bank_history"]) > 45: 
-                del town["bank_history"][list(town["bank_history"])[0]]
-                del town["total_residents_history"][list(town["total_residents_history"])[0]]
-
-
-        prev_players = world.players
-
-        with open("rulercraft/server_data.pickle", "wb") as f:
-            pickle.dump(server, f)
-        
         td = datetime.date.today()
+        town.bank_history[f"{td.year}, {td.month}, {td.day}"] = town.bank
+        town.total_residents_history[f"{td.year}, {td.month}, {td.day}"] = town.total_residents
         
-        with open(f"rulercraft/server_data_backup_{td.day}_{td.month}_{td.year}.pickle", "wb") as f:
-            pickle.dump(server, f)
+        for player in town.near_players:
+            if player.name not in town.visited:
+                town.visited[player.name] = {"total":0, "last":0}
+            town.visited[player.name]["total"] += s.REFRESH_INTERVAL
+            town.visited[player.name]["last"] = datetime.datetime.now()
         
-        print("2: " + str(datetime.datetime.now()))
-        try:
-        
-            try:
-                await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"{len(world.players)} online players | /info help"))
-            except:
-                pass
-            
-            await notifications(bot, client)
-        except Exception as e:
-            print(e)
-        
-        counter += 1
+        # Prune
+        for player_name in town.visited.copy().keys():
+            pl = world.get_player(player_name)
+            if pl and pl.last_online and datetime.datetime.now() - pl.last_online > datetime.timedelta(days=30):
+                del town.visited[player_name]
 
-        print("3: " + str(datetime.datetime.now()))
+        if len(town.bank_history) > 45: 
+            del town.bank_history[list(town.bank_history)[0]]
+            del town.total_residents_history[list(town.total_residents_history)[0]]
 
+    # Prune
+    for player in world.players.copy():
         
+        if player.online:
+            player.total_online += s.REFRESH_INTERVAL
+            player.last_online = datetime.datetime.now()
         
+        if player.last_online and datetime.datetime.now() - player.last_online > datetime.timedelta(days=45):
+            world.players.remove(player)
+    
+    for town in world.towns.copy():
+        if now - town.last_updated > datetime.timedelta(hours=1):
+            world.towns.remove(town)
+
+            #await bot.get_channel(985596858992853122).send(f"removed town {town_name}")
+    
+    if s.MIGRATE_OLD_SAVEFILE:
+        for player in world.players:
+            if not player.loaded_old_data and player.name in old_data["players"]:
+                player.total_online = old_data["players"][player.name]["activity"]["total"]
+                player.last_online = datetime.datetime.fromtimestamp(old_data["players"][player.name]["activity"]["last"])
+                player.loaded_old_data = True
         
+        for town in world.towns:
+            if not town.loaded_old_data and town.name in old_data["towns"]:
+                for player_name, visited_data in old_data["towns"][town.name]["visited"].items():
+                    town.visited[player_name] = {"total":visited_data["total"], "last":datetime.datetime.fromtimestamp(visited_data["last"])}
+                town.bank_history = old_data["towns"][town.name]["bank_history"]
+                town.total_residents_history = old_data["towns"][town.name]["total_residents_history"]
+                town.loaded_old_data = True
+        
+        if not world.loaded_old_data:
+            world.total_tracked = old_data["total_tracked"]
+    
+    world.next_refresh = now + datetime.timedelta(seconds=s.REFRESH_INTERVAL)
+    world.process_time = datetime.datetime.now() - now
+    
+    async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
+        await f.write(pickle.dumps(world))
+    
+    if s.BACKUP_SAVEFILE:
+        td = datetime.date.today()
+        async with aiofiles.open(f"rulercraft/server_data_backup_{td.day}_{td.month}_{td.year}.pickle", 'wb') as f:
+            await f.write(pickle.dumps(world))
+    
+    if s.DEBUG_MODE: print("2: " + str(datetime.datetime.now()))
+    
+    counter += 1
     
 
-    @tasks.loop(seconds=20)
+    return world
+
+async def get_last_refresh() -> typing.Optional[datetime.datetime]:
+    
+    try:
+        async with aiofiles.open('rulercraft/server_data.pickle', 'rb') as f:
+            return pickle.loads(await f.read()).last_refreshed
+    except FileNotFoundError:
+        return datetime.datetime.now() - datetime.timedelta(seconds=15)
+    except EOFError:
+        return None
+
+async def load_file() -> dynmap.world.World:
+    world = dynmap.world.World()
+    
+    try:
+        async with aiofiles.open('rulercraft/server_data.pickle', 'rb') as f:
+            world.load_old_world(pickle.loads(await f.read()))
+    except FileNotFoundError:
+        pass
+    except EOFError:
+        return None
+    
+    return world
+
+async def refresh_status(bot : commands.Bot, client_a : dynmap.Client):
+    try:
+        await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=((s.STATUS_EXTRA + " | ") if s.STATUS_EXTRA != "" else "") + f"{len(client_a.world.online_players)} online players | /info help"))
+    except:
+        pass
+
+
+
+def load_file_task(bot : commands.Bot, client_a : dynmap.Client):
+    @tasks.loop(seconds=s.REFRESH_INTERVAL)
     async def get_world():
-        asyncio.run(task(bot, client_a))
+        
+        last_refresh = await get_last_refresh()
+        if last_refresh:
+            
+            # Attempt to sync
+            dur = datetime.timedelta(seconds=20) - (datetime.datetime.now() - last_refresh)
+            if dur < datetime.timedelta(seconds=10):
+                await asyncio.sleep(dur.total_seconds() + 2)
+            
+            client_a.world = await load_file()
+            if s.DEBUG_MODE: print("Loaded world!")
+            
+            await notifications(bot, client_a)
+            await refresh_status(bot, client_a)
+        else:
+            if s.DEBUG_MODE: print("Couldn't load world. Reading and writing at same time? World doesn't exist?")
+    
+    return get_world
 
-        return "h"
-    
-    
+def load_and_update_file_task(bot : commands.Bot, client_a : dynmap.Client):
+    @tasks.loop(seconds=s.REFRESH_INTERVAL)
+    async def get_world():
+        
+        refresh = await refresh_file(client_a)
+        client_a.world = refresh
         
         
+        await notifications(bot, client_a)
+        await refresh_status(bot, client_a)
     
     return get_world
