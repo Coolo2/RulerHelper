@@ -37,6 +37,13 @@ async def setup_hook():
         async with aiofiles.open("rulercraft/config.json", "w") as f:
             await f.write("{}")
     
+    for extension in extensions:
+        await bot.load_extension(f"cmds.{extension}")
+
+    if s.PRODUCTION_MODE:
+        await bot.load_extension("cogs.errors")
+    await bot.load_extension("cogs.events")
+
     if s.refresh_commands:
         await tree.sync()
 
@@ -46,28 +53,13 @@ async def setup_hook():
             except:
                 print(f"Couldn't sync commands to {guild.id}")
 
-    for extension in extensions:
-        await bot.load_extension(f"cmds.{extension}")
-
-    if s.PRODUCTION_MODE:
-        await bot.load_extension("cogs.errors")
-    await bot.load_extension("cogs.events")
-
     # Run the refresher
     if s.MULTI_THREAD_MODE:
         import task
         import threading 
 
-        def run_updater():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(task.periodic())
-        t = threading.Thread(target=run_updater)
+        t = threading.Thread(target=task.periodic, args=(client,))
         t.start()
-        
-        #import subprocess;subprocess.Popen(["python", "task.py", "thread"], cwd=os.path.dirname(os.path.realpath(__file__)) )
-        #await asyncio.sleep(5)
-        cogs.tasks.load_file_task(bot, client).start()
     else:
         cogs.tasks.load_and_update_file_task(bot, client).start()
 

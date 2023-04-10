@@ -6,7 +6,7 @@ class SelectTowns(discord.ui.Select):
         super().__init__()
 
         for town in towns:
-            self.add_option(label=town.name)
+            self.add_option(label=town.name[:25])
         
         self.tree = tree
         self.cog = cog

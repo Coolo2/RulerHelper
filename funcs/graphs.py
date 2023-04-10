@@ -7,6 +7,7 @@ import matplotlib.style as mplstyle
 
 matplotlib.use('Agg') 
 mplstyle.use('fast')
+matplotlib.interactive(True)
 
 from itertools import islice
 

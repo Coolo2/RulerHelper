@@ -7,6 +7,9 @@ if typing.TYPE_CHECKING:
 import typing
 import datetime
 
+import warnings 
+warnings.filterwarnings("ignore", category=UserWarning, module="bs4")
+
 from bs4 import BeautifulSoup
 import math
 
@@ -16,14 +19,44 @@ from funcs import functions
 import discord
 
 VERSION = 1
-IGNORE_ATTRS = ["world"]
+IGNORE_ATTRS = ["world", "raw", "desc"]
 
 def calculateDistance(coordinate1, coordinate2):
     dist = math.sqrt((coordinate1[1] - coordinate1[0])**2 + (coordinate2[1] - coordinate2[0])**2)
     return dist
 
 def to_dict(obj : typing.Callable):
-    return {k:(v.to_dict() if hasattr(v, "to_dict") else [(i.to_dict() if hasattr(i, "to_dict") else i.__dict__ if hasattr(i, "__dict__") else i) for i in v] if hasattr(v, "__iter__") and type(v) != str else v.__dict__ if hasattr(v, "__dict__") else v)  for k, v in obj.__dict__.items()}
+    {k:(v.to_dict() if hasattr(v, "to_dict") else [(i.to_dict() if hasattr(i, "to_dict") else i.__dict__ if hasattr(i, "__dict__") else i) for i in v] if hasattr(v, "__iter__") and type(v) != str else v.__dict__ if hasattr(v, "__dict__") else v)  for k, v in obj.__dict__.items()}
+
+    d = {}
+    
+    for k, v in obj.__dict__.items():
+        if k in IGNORE_ATTRS: continue
+
+        if hasattr(v, "to_dict"):
+            d[k] = v.to_dict()
+        elif hasattr(v, "__iter__") and type(v) != str:
+            d[k] = [] 
+            for i in v:
+                if hasattr(i, "to_dict"):
+                    d[k].append(i.to_dict()) 
+                elif hasattr(i, "__dict__"): 
+                    o = {}
+                    for k2, v2 in i.__dict__.items():
+                        if k2 in IGNORE_ATTRS: continue 
+                        o[k2] = v2
+                    d[k].append(o)  
+                else: 
+                    d[k].append(i)
+        elif hasattr(v, "__dict__"):
+            d[k] = {}
+            for k2, v2 in v.__dict__.items():
+                if k2 in IGNORE_ATTRS: continue 
+                d[k][k2] = v2
+        else: 
+            d[k] = v
+    
+    return d
 
 class Player:
 
@@ -46,7 +79,7 @@ class Player:
 
         self.world = world
 
-        self.avatar_path = f"/tiles/faces/32x32/{self.name}.png"
+        self.avatar_path : str = None
 
         self.likely_residency_set : str = None 
         self.discord_id_set : int = None
@@ -63,6 +96,7 @@ class Player:
         self.y = round(data["y"])
         self.z = round(data["z"])
         self.health = data["health"]
+        self.avatar_path = f"/tiles/faces/32x32/{self.name}.png"
 
     @property
     def current_town(self) -> dynmap_w.Town:
@@ -141,11 +175,11 @@ class Player:
                     return member.id 
     
     @classmethod
-    def load_old(self, world : dynmap_w.World, old_player : dynmap_w.Player):
+    def load_old(self, world : dynmap_w.World, old_player : dict):
         s = self(world)
-        s.load_data(old_player.raw)
+        #s.load_data(old_player["raw"])
 
-        for attr_name, attr_value in old_player.__dict__.items():
+        for attr_name, attr_value in old_player.items():
             if attr_name in IGNORE_ATTRS:
                 continue
             setattr(s, attr_name, attr_value)
@@ -180,10 +214,10 @@ class _CultureOrReligion:
         return c
 
     @classmethod
-    def load_old(self, world : dynmap_w.World, old_cr : dynmap_w._CultureOrReligion):
-        s = self(world, old_cr.name)
+    def load_old(self, world : dynmap_w.World, old_cr : dict):
+        s = self(world, old_cr["name"])
 
-        for attr_name, attr_value in old_cr.__dict__.items():
+        for attr_name, attr_value in old_cr.items():
             if attr_name in IGNORE_ATTRS:
                 continue
             setattr(s, attr_name, attr_value)
@@ -295,10 +329,10 @@ class Nation:
         return borders
 
     @classmethod
-    def load_old(self, world : dynmap_w.World, old_nation : dynmap_w.Nation):
-        s = self(world, old_nation.name)
+    def load_old(self, world : dynmap_w.World, old_nation : dict):
+        s = self(world, old_nation["name"])
 
-        for attr_name, attr_value in old_nation.__dict__.items():
+        for attr_name, attr_value in old_nation.items():
             if attr_name in IGNORE_ATTRS:
                 continue
             setattr(s, attr_name, attr_value)
@@ -348,14 +382,6 @@ class Town:
         self.fill_color : str = None
 
         self.points = []
-
-        if area_data:
-            self.name = area_data["label"]
-            self.desc = area_data["desc"]
-
-            self.border_color = area_data["color"]
-            self.fill_color = area_data["fillcolor"]
-            # Add world data seperately
         
         # Added externally
 
@@ -375,13 +401,17 @@ class Town:
         self.religion : Religion = None
 
         self.bank_history : typing.Dict[str, float] = {}
-        self.total_residents_history : typing.Dict[str, int] = {}
-        self.visited : typing.Dict[str, typing.Dict[str, int]] = {}
+        self.total_residents_history : typing.Dict[str, typing.Union[int, datetime.datetime]] = {}
+        self.visited : typing.Dict[str, typing.Dict[str, typing.Union[int, datetime.datetime]]] = {}
 
         self.last_updated : datetime.datetime = None
         self.loaded_old_data = False
 
-        self._parse_desc()
+        if area_data:
+            self.add_area_data(area_data)
+            # Add world data seperately
+
+        
     
     def towns_within_range(self, blocks : int) -> typing.List[dynmap_w.Town]:
         towns = []
@@ -419,6 +449,13 @@ class Town:
     
     
     def add_area_data(self, area_data):
+        old_desc = self.desc
+
+        self.name = area_data["label"]
+        
+
+        self.border_color = area_data["color"]
+        self.fill_color = area_data["fillcolor"]
 
         new_data = []
 
@@ -426,6 +463,9 @@ class Town:
             new_data.append([area_data["x"][i], area_data["z"][i]])
         
         self.points.append(new_data)
+        if old_desc != area_data["desc"]:
+            self.desc = area_data["desc"]
+            self._parse_desc()
 
     def describe(self):
 
@@ -461,8 +501,8 @@ class Town:
 
         if not desc:
             return
-
-        soup = BeautifulSoup(desc, "html.parser")
+        
+        soup = BeautifulSoup(desc, "html.parser", from_encoding="utf8")
 
         tags = soup.find_all("span")
 
@@ -631,10 +671,10 @@ class Town:
         return stats
 
     @classmethod
-    def load_old(self, world : dynmap_w.World, old_town : dynmap_w.Town):
+    def load_old(self, world : dynmap_w.World, old_town : dict):
         s = self(world, None)
 
-        for attr_name, attr_value in old_town.__dict__.items():
+        for attr_name, attr_value in old_town.items():
             if attr_name in IGNORE_ATTRS:
                 continue
             setattr(s, attr_name, attr_value)
@@ -752,15 +792,20 @@ class World():
         return None   
     
     
-    def load_old_world(self, old_world : dynmap_w.World):
-        for attr_name, attr_value in old_world.__dict__.items():
+    def load_old_world(self, old_world : dict):
+        for attr_name, attr_value in old_world.items():
             if attr_name not in ["players", "towns", "nations", "cultures", "religions"]:
                 setattr(self, attr_name, attr_value)
+                
             else:
                 for obj in attr_value:
-                    t : typing.Type[typing.Union[Player, Town, Nation, Culture, Religion]] = type(obj)
+                    
+                    trs = {"players":Player, "towns":Town, "nations":Nation, "cultures":Culture, "religions":Religion}
+                    t : typing.Type[typing.Union[Player, Town, Nation, Culture, Religion]] = trs[attr_name]
                     o = t.load_old(self, obj)
                     getattr(self, attr_name).append(o)
+
+        
 
 
         

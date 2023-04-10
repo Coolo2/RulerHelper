@@ -43,7 +43,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
 
         description_string = ""
         for player in world.online_players:
-            description_string += f"**{player.name}**:    [{player.x:,d}, {player.y:,d}, {player.z:,d}]({self.client.url}?x={player.x}&z={player.z}&zoom=8) (`{round((player.total_online / world.total_tracked) * 100)}%`)\n"
+            description_string += f"**{discord.utils.escape_markdown(player.name)}**:    [{player.x:,d}, {player.y:,d}, {player.z:,d}]({self.client.url}?x={player.x}&z={player.z}&zoom=8) (`{round((player.total_online / world.total_tracked) * 100)}%`)\n"
         
         embed.set_image(url="attachment://world_map.png")
 
@@ -345,7 +345,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         embed.set_image(url="attachment://culture_towns.png")
 
         view = discord.ui.View(timeout=3600)
-        view.add_item(towns_view.SelectTowns(self, self.bot.tree, towns[25:]))
+        view.add_item(towns_view.SelectTowns(self, self.bot.tree, towns[:25]))
 
         await interaction.followup.send(embed=embed, file=graph, view=view)
     

@@ -11,6 +11,7 @@ import asyncio
 
 import setup as s
 import dynmap
+import pprint
 
 counter = 0
 territory_enter_sent = {}
@@ -91,6 +92,7 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
     if s.DEBUG_MODE: print("Got")
 
     world = await load_file()
+    if not world: print("Couldn't load world.");return 
     
     if s.DEBUG_MODE: print("1: " + str(datetime.datetime.now()))
 
@@ -98,9 +100,7 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
         async with aiofiles.open("rulercraft/old_data.pickle", "rb") as f:
             old_data = pickle.loads(await f.read())
 
-    
     world.total_tracked += s.REFRESH_INTERVAL
-    world.last_refreshed = datetime.datetime.now()
 
     world.is_stormy = data["hasStorm"]
     world.is_thundering = data["isThundering"]
@@ -169,9 +169,8 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
             town.visited[player.name]["last"] = datetime.datetime.now()
         
         # Prune
-        for player_name in town.visited.copy().keys():
-            pl = world.get_player(player_name)
-            if pl and pl.last_online and datetime.datetime.now() - pl.last_online > datetime.timedelta(days=30):
+        for player_name, value in town.visited.copy().items():
+            if datetime.datetime.now() - value["last"] > datetime.timedelta(days=45):
                 del town.visited[player_name]
 
         if len(town.bank_history) > 45: 
@@ -189,7 +188,7 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
             world.players.remove(player)
     
     for town in world.towns.copy():
-        if now - town.last_updated > datetime.timedelta(hours=1):
+        if now - town.last_updated > datetime.timedelta(hours=1, minutes=30):
             world.towns.remove(town)
 
             #await bot.get_channel(985596858992853122).send(f"removed town {town_name}")
@@ -211,12 +210,14 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
         
         if not world.loaded_old_data:
             world.total_tracked = old_data["total_tracked"]
+            world.loaded_old_data = True
     
-    world.next_refresh = now + datetime.timedelta(seconds=s.REFRESH_INTERVAL)
     world.process_time = datetime.datetime.now() - now
+    world.last_refreshed = datetime.datetime.now()
     
     async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
-        await f.write(pickle.dumps(world))
+        #await f.write(pickle.dumps(world))
+        await f.write(pickle.dumps(world.to_dict()))
     
     if s.BACKUP_SAVEFILE:
         td = datetime.date.today()
@@ -230,26 +231,34 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
 
     return world
 
-async def get_last_refresh() -> typing.Optional[datetime.datetime]:
-    
-    try:
-        async with aiofiles.open('rulercraft/server_data.pickle', 'rb') as f:
-            return pickle.loads(await f.read()).last_refreshed
-    except FileNotFoundError:
-        return datetime.datetime.now() - datetime.timedelta(seconds=15)
-    except EOFError:
-        return None
-
-async def load_file() -> dynmap.world.World:
+async def load_file(recursion=0) -> dynmap.world.World:
     world = dynmap.world.World()
-    
+
     try:
         async with aiofiles.open('rulercraft/server_data.pickle', 'rb') as f:
-            world.load_old_world(pickle.loads(await f.read()))
+            #load = pickle.loads(await f.read())
+            load = pickle.loads(await f.read())
+
+            if type(load) != dict and recursion <= 3:
+                await asyncio.sleep(2)
+                if s.DEBUG_MODE: print("Loading file failed. Trying again")
+                return await load_file(recursion=recursion+1)
+            
+            if type(load) == dict:
+                world.load_old_world(load)
     except FileNotFoundError:
         pass
     except EOFError:
-        return None
+        if recursion <= 3:
+            await asyncio.sleep(2)
+            if s.DEBUG_MODE: print("Loading file failed. Trying again")
+            return await load_file(recursion=recursion+1)
+    except pickle.UnpicklingError as e:
+        print(e)
+        if recursion <= 3:
+            await asyncio.sleep(2)
+            if s.DEBUG_MODE: print("Loading file failed. Trying again")
+            return await load_file(recursion=recursion+1)
     
     return world
 
@@ -258,30 +267,6 @@ async def refresh_status(bot : commands.Bot, client_a : dynmap.Client):
         await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=((s.STATUS_EXTRA + " | ") if s.STATUS_EXTRA != "" else "") + f"{len(client_a.world.online_players)} online players | /info help"))
     except:
         pass
-
-
-
-def load_file_task(bot : commands.Bot, client_a : dynmap.Client):
-    @tasks.loop(seconds=s.REFRESH_INTERVAL)
-    async def get_world():
-        
-        last_refresh = await get_last_refresh()
-        if last_refresh:
-            
-            # Attempt to sync
-            dur = datetime.timedelta(seconds=20) - (datetime.datetime.now() - last_refresh)
-            if dur < datetime.timedelta(seconds=10):
-                await asyncio.sleep(dur.total_seconds() + 2)
-            
-            client_a.world = await load_file()
-            if s.DEBUG_MODE: print("Loaded world!")
-            
-            await notifications(bot, client_a)
-            await refresh_status(bot, client_a)
-        else:
-            if s.DEBUG_MODE: print("Couldn't load world. Reading and writing at same time? World doesn't exist?")
-    
-    return get_world
 
 def load_and_update_file_task(bot : commands.Bot, client_a : dynmap.Client):
     @tasks.loop(seconds=s.REFRESH_INTERVAL)

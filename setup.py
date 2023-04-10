@@ -11,7 +11,7 @@ PRODUCTION_MODE = True # Enable this if you are not testing anything. Enables er
 REFRESH_INTERVAL = 20 # How often to track server changes.
 BACKUP_SAVEFILE = False
 MIGRATE_OLD_SAVEFILE = True # Ensure there is a file in the rulercraft directory named 'old_data.pickle'
-STATUS_EXTRA = "test" # Announcements etc to go in "watching" status can go here
+STATUS_EXTRA = "" # Announcements etc to go in "watching" status can go here
 
 MULTI_THREAD_MODE = True # Enable this to improve performance. Almost no memory increase, however causes some syncing issues (may be a few extra seconds of data delay)
 DEBUG_MODE = True

@@ -46,7 +46,7 @@ class AcceptView(discord.ui.View):
                 self.player.likely_residency_set = None
             
             async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
-                await f.write(pickle.dumps(self.client.world))
+                await f.write(pickle.dumps(self.client.world.to_dict()))
             
             button.disabled = True
             
@@ -58,7 +58,7 @@ class AcceptView(discord.ui.View):
             self.player.discord_id_set = self.discord_id
             
             async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
-                await f.write(pickle.dumps(self.client.world))
+                await f.write(pickle.dumps(self.client.world.to_dict()))
             
             button.disabled = True
             
@@ -191,12 +191,12 @@ class Mod(commands.Cog):
             player.likely_residency_set = None
         
         async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
-            await f.write(pickle.dumps(self.client.world))
+            await f.write(pickle.dumps(self.client.world.to_dict()))
         
         return await interaction.response.send_message(
             embed=discord.Embed(
                 title="Successfully set likely residency",
-                description=f"Successfully set the likely residency for **{player.name}** to **{town.name_formatted}**.",
+                description=f"Successfully set the likely residency for **{player.name}** to **{town.name_formatted if town else 'None'}**.",
                 color=s.embedSuccess
             )
         )
@@ -234,7 +234,7 @@ class Mod(commands.Cog):
             player.discord_id_set = discord_id
         
         async with aiofiles.open('rulercraft/server_data.pickle', 'wb') as f:
-            await f.write(pickle.dumps(self.client.world))
+            await f.write(pickle.dumps(self.client.world.to_dict()))
         
         return await interaction.response.send_message(
             embed=discord.Embed(
