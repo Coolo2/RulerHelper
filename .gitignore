@@ -8,9 +8,10 @@ test.py
 __pycache__/
 *.py[cod]
 *$py.class
-
 *.pickle
+
 *.json
+assets/
 
 # C extensions
 *.so

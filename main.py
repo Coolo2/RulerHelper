@@ -60,6 +60,8 @@ async def setup_hook():
 
         t = threading.Thread(target=task.periodic, args=(client,))
         t.start()
+        await asyncio.sleep(10)
+        cogs.tasks.notifications_task(bot, client).start()
     else:
         cogs.tasks.load_and_update_file_task(bot, client).start()
 

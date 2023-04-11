@@ -3,7 +3,6 @@ from cogs import tasks
 import asyncio 
 import setup as s 
 import dynmap
-import sys
 import datetime
 
 def periodic(cl : dynmap.Client):
@@ -18,9 +17,6 @@ def periodic(cl : dynmap.Client):
                 cl.world = w
             except Exception as e:
                 print(e)
-            
-            await tasks.notifications(cl.bot, cl)
-            await tasks.refresh_status(cl.bot, cl)
 
             if s.DEBUG_MODE: print("Loaded world!")
             
@@ -28,14 +24,3 @@ def periodic(cl : dynmap.Client):
     
     loop = asyncio.new_event_loop()
     loop.run_until_complete(task())
-
-if "thread" in sys.argv:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    task = loop.create_task(periodic())
-
-    try:
-        loop.run_until_complete(task)
-    except asyncio.CancelledError:
-        pass

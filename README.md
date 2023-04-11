@@ -1,6 +1,6 @@
 # RulerHelper
 
-A discord bot for RulerCraft which shows many stats and allows you to interact with the server from your discord
+A discord bot for RulerCraft which tracks the server and shows many stats, allowing you to interact with the server from your discord
 
 ## Feature overview
 
@@ -81,7 +81,7 @@ webhook="a webhook to send to when the bot is added to a new server. if left bla
 - Run the `main.py` file to start the bot.
 - After first run, make sure to set refresh_commands to False in `setup.py`
 
-# Updating from previous version
+# Updating from Pre-v1.0.0
 
 1. Stop the bot from running
 2. Delete the cmds, cogs, dynmap and funcs direcoty

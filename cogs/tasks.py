@@ -268,6 +268,15 @@ async def refresh_status(bot : commands.Bot, client_a : dynmap.Client):
     except:
         pass
 
+def notifications_task(bot : commands.Bot, client_a : dynmap.Client):
+    @tasks.loop(seconds=s.REFRESH_INTERVAL)
+    async def get_world():
+        if client_a.world:
+            await notifications(bot, client_a)
+            await refresh_status(bot, client_a)
+    
+    return get_world
+
 def load_and_update_file_task(bot : commands.Bot, client_a : dynmap.Client):
     @tasks.loop(seconds=s.REFRESH_INTERVAL)
     async def get_world():
