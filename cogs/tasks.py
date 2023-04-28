@@ -178,6 +178,16 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
             del town.total_residents_history[list(town.total_residents_history)[0]]
 
     # Prune
+    for nation in world.nations.copy():
+        if len(nation.towns) < 1:
+            world.nations.remove(nation)
+    for culture in world.cultures.copy():
+        if len(culture.towns) < 1:
+            world.cultures.remove(culture)
+    for religion in world.religions.copy():
+        if len(religion.towns) < 1:
+            world.religions.remove(religion)
+        
     for player in world.players.copy():
         
         if player.online:
