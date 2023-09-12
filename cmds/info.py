@@ -59,6 +59,8 @@ class Info(commands.GroupCog, name="info", description="Bot info"):
     @app_commands.command(name="info", description="Get basic info and stats about the bot")
     async def _info(self, interaction : discord.Interaction):
         #print_here
+
+        await interaction.response.defer()
         
         embed = discord.Embed(title="Bot information", description="Ruler Helper is a bot created by <@368071242189897728> to provide some helpful tools to nations and towns.", color=s.embed)
 
@@ -75,7 +77,7 @@ class Info(commands.GroupCog, name="info", description="Bot info"):
         
         embed.add_field(name="Linked Discord accounts", value=str(total_linked_accounts))
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
 
 async def setup(bot : commands.Bot):

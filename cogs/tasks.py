@@ -68,7 +68,10 @@ async def notifications(bot : typing.Union[commands.Bot, discord.Client], client
                                 embed.add_field(name="Likely residency", value=f"{likely_residency} ({likely_residency_nation if likely_residency_nation else 'Unknown'})" if likely_residency and likely_residency else "Unknown")
                                 embed.set_thumbnail(url=client.url + player.avatar_path)
 
-                                await channel.send(embed=embed)
+                                try:
+                                    await channel.send(embed=embed)
+                                except:
+                                    pass
                 
 
                 if channel_id_str in territory_enter_sent:
@@ -127,8 +130,6 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
     
     for town in world.towns:
         town.points = []
-        
-    
 
     for area_name, area_data in map_data["sets"]["towny.markerset"]["areas"].items():
         
@@ -142,6 +143,10 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
         town.add_area_data(area_data)
         town.last_updated = datetime.datetime.now()
     
+    if len(map_data["sets"]["towny.markerset"]["areas"]) < 5:
+        print("DATA MISSING? IGNORING REFRESH")
+        return
+    
     for marker_name, marker_data in map_data["sets"]["towny.markerset"]["markers"].items():
         for town in world.towns:
             if town.name == marker_data["label"]:
@@ -149,7 +154,9 @@ async def refresh_file(client : dynmap.Client) -> dynmap.world.World:
                 town.y = round(marker_data["y"])
                 town.z = round(marker_data["z"])
                 town.icon = marker_data["icon"]
-        
+    
+    
+
     for town in world.towns:
         if town.culture and town.culture not in world.cultures:
             world.cultures.append(town.culture)

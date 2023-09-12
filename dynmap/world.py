@@ -550,10 +550,11 @@ class Town:
                     pass
 
             if tag.string and "Founded:" in tag.string:
+                
                 try:
                     self.founded = datetime.datetime.strptime(tag.parent.get_text().split("Founded: ")[1], "%b %d %Y").date()
                 except:
-                    pass
+                    self.founded = datetime.date.today()
             
             if tag.string and "🕎 Culture -" in tag.string:
                 try:

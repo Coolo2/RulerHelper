@@ -118,7 +118,7 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         if not town:
             raise e.MildError("Town not found")
 
-        borders = town.borders
+        
         
         file_name = graphs.plot_towns([town], outposts=False)
         graph = discord.File(file_name, filename="town_border.png")
@@ -184,8 +184,11 @@ class Get(commands.GroupCog, name="get", description="All get commands"):
         if town.religion:
             embed.add_field(name="Religion", value=town.religion.name)
         
-        if len(borders) > 0:
-            embed.add_field(name=f"Borders ({len(town.borders)})", value="`" + "`, `".join(t.name_formatted for t in borders) + "`", inline=False)
+        # Don't calculate borders if over 50 detatched territories. performance reasons
+        if len(town.points) < 50:
+            borders = town.borders
+            if len(borders) > 0:
+                embed.add_field(name=f"Borders ({len(borders)})", value="`" + "`, `".join(t.name_formatted for t in borders) + "`", inline=False)
         
         if len(notable_statistics) > 0:
             embed.add_field(name="Notable Statistics", value="- " + "\n- ".join(notable_statistics), inline=False)
